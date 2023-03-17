@@ -1,0 +1,18 @@
+channels:
+    - pytorch
+    - conda-forge
+name:
+    domain_adaptation
+dependencies:
+    - affogato
+    - bioimageio.core >=0.5.0
+    - pytorch
+    - python-elf
+    - cpuonly
+    - python >=3.8,<3.11
+    - tensorboard
+    - tifffile
+    - torchvision
+    - tqdm
+    - kornia
+    - torch_em
