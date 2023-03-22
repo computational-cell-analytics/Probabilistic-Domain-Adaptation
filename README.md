@@ -1,4 +1,6 @@
-# Probabilistic Domain Adapation in Biomedical Image Segmentation
+# Probabilistic Domain Adapation for Biomedical Image Segmentation
+
+Doomain adaptation based on self-training and probabilistic segmentation. This repository implements the methods described in [Probabilistic Domain Adaptation for Probabilistic Domain Adaptation (arXiv)](https://arxiv.org/abs/2303.11790).
 
 ## Installation
 
