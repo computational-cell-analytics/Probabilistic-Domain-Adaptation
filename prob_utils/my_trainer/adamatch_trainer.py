@@ -9,6 +9,7 @@ from torch_em.trainer.logger_base import TorchEmLogger
 from prob_utils.my_utils import dice_score
 from prob_utils.my_models import l2_regularisation
 
+
 class AdaMatchTrainer(torch_em.trainer.DefaultTrainer):
     """This trainer is meant to be used for AdaMatch-based PUNet's joint-training,
     where we also weight the ELBO based on consensus masks"""

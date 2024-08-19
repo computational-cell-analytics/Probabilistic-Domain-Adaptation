@@ -1,15 +1,17 @@
 import os
-import h5py
-import imageio
-import numpy as np
 from glob import glob
 from shutil import rmtree
+
+import h5py
+import imageio.v3 as imageio
+import numpy as np
 from skimage.measure import label
 
 import torch_em
 from torch_em.data.datasets.util import download_source, unzip, update_kwargs
 
 from .my_segmentation_datasets import default_dual_segmentation_loader
+
 
 URL = "https://github.com/unidesigner/groundtruth-drosophila-vnc/archive/refs/heads/master.zip"
 CHECKSUM = "f7bd0db03c86b64440a16b60360ad60c0a4411f89e2c021c7ee2c8d6af3d7e86"
@@ -63,22 +65,21 @@ def get_vnc_mito_loader(
 ):
     _get_vnc_data(path, download)
     assert partition in ("tr", "ts")
-    # we do this to reverse the train-test because we only have "stack1" 's true labels, 
-    # hence can develop self learning on the test split, i.e. "stack2" 
-    if partition=="tr":
-        split="test"
-    elif partition=="ts":
-        split="train"
+    # we do this to reverse the train-test because we only have "stack1" 's true labels,
+    # hence can develop self learning on the test split, i.e. "stack2"
+    if partition == "tr":
+        split = "test"
+    elif partition == "ts":
+        split = "train"
 
     data_path = os.path.join(path, f"vnc_{split}.h5")
 
     assert sum((offsets is not None, boundaries, binary)) <= 1, f"{offsets}, {boundaries}, {binary}"
     if offsets is not None:
         # we add a binary target channel for foreground background segmentation
-        label_transform = torch_em.transform.label.AffinityTransform(offsets=offsets,
-                                                                     ignore_label=None,
-                                                                     add_binary_target=True,
-                                                                     add_mask=True)
+        label_transform = torch_em.transform.label.AffinityTransform(
+            offsets=offsets, ignore_label=None, add_binary_target=True, add_mask=True
+        )
         msg = "Offsets are passed, but 'label_transform2' is in the kwargs. It will be over-ridden."
         kwargs = update_kwargs(kwargs, 'label_transform2', label_transform, msg=msg)
     elif boundaries:

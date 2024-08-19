@@ -2,7 +2,9 @@ import numpy as np
 from copy import deepcopy
 
 import torch
+
 from torch_em.util import ensure_tensor_with_channels, load_image, supports_memmap
+
 
 # TODO pad images that are too small for the patch shape
 class DualRawImageCollectionDataset(torch.utils.data.Dataset):
@@ -133,10 +135,10 @@ class DualRawImageCollectionDataset(torch.utils.data.Dataset):
 
         # creating a random sample to pass as label - to keep the consistency of my AdaMatch and AdaMT trainings
         _labels = deepcopy(raw)
-        labels1 = _labels[0,:,:]
+        labels1 = _labels[0, :, :]
         labels1, labels2 = labels1.unsqueeze(0), labels1.unsqueeze(0)
-        labels = torch.cat((labels1,labels2))
-        labels = np.where(labels>0, 1, 0)
+        labels = torch.cat((labels1, labels2))
+        labels = np.where(labels > 0, 1, 0)
 
         if self.augmentation1 or self.augmentation2 is not None:
             return raw, raw1, raw2, labels

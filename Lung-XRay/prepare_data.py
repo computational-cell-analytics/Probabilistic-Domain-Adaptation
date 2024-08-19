@@ -1,16 +1,13 @@
-import argparse
 import os
+import argparse
 from glob import glob
+from tqdm import tqdm
 from shutil import copytree
 
-try:
-    import imageio.v2 as imageio
-except ImportError:
-    import imageio
-
 import numpy as np
+import imageio.v3 as imageio
 from skimage.transform import resize
-from tqdm import tqdm
+
 
 TARGET_SHAPE = (256, 256)
 

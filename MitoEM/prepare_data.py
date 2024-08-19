@@ -3,8 +3,8 @@ import argparse
 
 from torch_em.data.datasets.util import download_source, unzip
 
-def download_lucchi_data(_path, download=True):
 
+def download_lucchi_data(_path, download=True):
     path = _path + "lucchi/"
 
     URL = "http://www.casser.io/files/lucchi_pp.zip"
@@ -24,7 +24,6 @@ def download_lucchi_data(_path, download=True):
 
 
 def download_vnc_data(_path, download=True):
-
     path = _path + "vnc/"
 
     URL = "https://github.com/unidesigner/groundtruth-drosophila-vnc/archive/refs/heads/master.zip"
@@ -37,14 +36,17 @@ def download_vnc_data(_path, download=True):
 
     root = os.path.join(path, "groundtruth-drosophila-vnc-master")
     assert os.path.exists(root)
-    
+
 
 def main(args):
-    download_lucchi_data(_path = args.data)
-    download_vnc_data(_path = args.data)
+    download_lucchi_data(_path=args.data)
+    download_vnc_data(_path=args.data)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="~/data/", help="Path where the dataset will be downloaded by the functions")
+    parser.add_argument(
+        "--data", type=str, default="~/data/", help="Path where the dataset will be downloaded by the functions"
+    )
     args = parser.parse_args()
     main(args)

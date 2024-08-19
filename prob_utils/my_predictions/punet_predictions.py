@@ -1,18 +1,25 @@
 import os
-import numpy as np
 from glob import glob
-import imageio.v2 as imageio
+
+import numpy as np
+import imageio.v3 as imageio
 
 import torch
+
 import torch_em
 
 from prob_utils.my_models import clean_folder
 
 
-def punet_prediction(input_image_path, output_pred_path, model,
-                prior_samples=8, device='cpu', mysig = torch.nn.Sigmoid()):
+def punet_prediction(
+    input_image_path,
+    output_pred_path,
+    model,
+    prior_samples=8,
+    device='cpu',
+    mysig=torch.nn.Sigmoid()
+):
     'function that generates predictions from the PUNet'
-
     os.makedirs(output_pred_path, exist_ok=True)
     clean_folder(output_pred_path)
 
@@ -41,10 +48,16 @@ def punet_prediction(input_image_path, output_pred_path, model,
             print(f"{my_image_name} prediction saved")
 
 
-def punet_pseudo_prediction(input_image_path, output_pred_path, model, prior_samples=8, 
-                            device='cpu', cellname_=None, split_name:str=None):
-    """
-    # script to do predictions using trained punet on test samples (now for pseudo labelling)
+def punet_pseudo_prediction(
+    input_image_path,
+    output_pred_path,
+    model,
+    prior_samples=8,
+    device='cpu',
+    cellname_=None,
+    split_name: str = None
+):
+    """Function to use trained punet on test samples (now for pseudo labelling)
     output_pred_path : Path where predictions will be saved
     input_image_path : Path where the input images are there
     model : weights initialised to the model architecture
@@ -72,8 +85,8 @@ def punet_pseudo_prediction(input_image_path, output_pred_path, model, prior_sam
             my_patch = my_patch.unsqueeze(0).unsqueeze(0).to(device)
             model.forward(my_patch, None, training=False)
 
-            samples_per_patch = [] # original samples b/w range [0,1]
-            masks_per_patch = [] # The "confidence mask" (pixels that are <0.1, >0.9 for the pixels in all samples)
+            samples_per_patch = []  # original samples b/w range [0,1]
+            masks_per_patch = []  # The "confidence mask" (pixels that are <0.1, >0.9 for the pixels in all samples)
 
             for _ in range(prior_samples):
                 mysig = torch.nn.Sigmoid()
@@ -92,7 +105,7 @@ def punet_pseudo_prediction(input_image_path, output_pred_path, model, prior_sam
 
             # consensus mask
             consensus_mask = np.stack(masks_per_patch, axis=0).sum(axis=0)/prior_samples
-            consensus_mask = np.where(consensus_mask==1, 1, 0)
+            consensus_mask = np.where(consensus_mask == 1, 1, 0)
 
             dir1 = output_pred_path + f"annotations/{split_name}/{cellname_}/"
             dir2 = output_pred_path + f"consensus/{split_name}/{cellname_}/"

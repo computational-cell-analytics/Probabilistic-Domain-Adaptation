@@ -1,8 +1,8 @@
-## Probabilistic Domain Adaptation on [LiveCELL](https://www.nature.com/articles/s41592-021-01249-6) Dataset
+## Probabilistic Domain Adaptation on [LIVECell](https://www.nature.com/articles/s41592-021-01249-6) Dataset
 
 > Dataset is publicly available [here](https://sartorius-research.github.io/LIVECell/)
 
-Implements the domain adaptation experiments on the LiveCELL dataset. Each script implements training, prediction and validation of the respective model.
+Implements the domain adaptation experiments on the LIVECell dataset. Each script implements training, prediction and validation of the respective model.
 All the required data can be downloaded with the script `prepare_data.py`.
 
 For more information on the individual scripts refer to their help output, e.g. `python livecell_unet.py -h`.

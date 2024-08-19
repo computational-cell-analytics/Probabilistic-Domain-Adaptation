@@ -1,15 +1,17 @@
 import os
-import h5py
-import imageio
-import numpy as np
 from tqdm import tqdm
 from glob import glob
 from shutil import rmtree
 from concurrent import futures
 
+import h5py
+import imageio.v3 as imageio
+import numpy as np
+
 from torch_em.data.datasets.util import download_source, unzip
 
 from .my_segmentation_datasets import default_dual_segmentation_loader
+
 
 URL = "http://www.casser.io/files/lucchi_pp.zip"
 CHECKSUM = "770ce9e98fc6f29c1b1a250c637e6c5125f2b5f1260e5a7687b55a79e2e8844d"

@@ -9,6 +9,7 @@ from .unet_blocks import *
 from .unet import Unet
 from .utils import init_weights, init_weights_orthogonal_normal
 
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
