@@ -16,13 +16,22 @@ def train_unet(data_path, dataset_name, patch_shape, **kwargs):
     )
     model = get_model(dataset_name=dataset_name, device=device)
 
+    name = f"unet-source-{dataset_name}",
+    if "cell_types" in kwargs:
+        cell_type = kwargs["cell_types"][0]
+        name += f"-{cell_type}"
+
+    if "subtype" in kwargs:
+        subtype = kwargs["subtype"]
+        name += f"-{subtype}"
+
     trainer = torch_em.default_segmentation_trainer(
-        name=f"unet-source-{dataset_name}",
+        name=name,
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
         device=device,
-        learning_rate=5e-4,
+        learning_rate=1e-4,
         log_image_interval=100,
         mixed_precision=True,
         compile_model=False,

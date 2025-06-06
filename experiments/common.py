@@ -8,9 +8,6 @@ from torch_em.model import UNet2d, UNet3d
 from torch_em.data import datasets, MinForegroundSampler
 
 
-CELL_TYPES = ["A172", "BT474", "BV2", "Huh7", "MCF7", "SHSY5Y", "SkBr3", "SKOV3"]
-
-
 def get_model(dataset_name: str, device: Union[str, torch.device]) -> torch.nn.Module:
     """Get the semantic segmentation model.
 
