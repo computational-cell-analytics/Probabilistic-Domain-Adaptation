@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 import torch_em
 
-from prob_utils.my_datasets import DualImageCollectionDataset
+from . import DualImageCollectionDataset
 
 
 def my_label_transform(x):

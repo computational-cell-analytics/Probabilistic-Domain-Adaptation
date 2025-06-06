@@ -6,12 +6,12 @@ from torchvision import transforms
 
 from torch_em.transform.raw import get_raw_transform, AdditiveGaussianNoise, GaussianBlur, RandomContrast
 
-from prob_utils.my_models import ProbabilisticUnet
-from prob_utils.my_predictions import punet_prediction
-from prob_utils.my_evaluations import run_dice_evaluation
-from prob_utils.my_datasets import get_dual_livecell_loader
-from prob_utils.my_utils import DummyLoss, my_standardize_torch
-from prob_utils.my_trainer import AdaMatchTrainer, AdaMatchLogger
+from prob_utils.models import ProbabilisticUnet
+from prob_utils.inference import punet_prediction
+from prob_utils.evaluation import dice_evaluation
+from prob_utils.datasets import get_dual_livecell_loader
+from prob_utils.utils import DummyLoss, my_standardize_torch
+from prob_utils.trainer import AdaMatchTrainer, AdaMatchLogger
 
 
 def my_weak_augmentations(p=0.25):
@@ -215,7 +215,7 @@ def do_adamatch_evaluations(data_path: str, pred_path: str):
                     print("The model predictions haven't been generated, hence no evaluation")
                     continue
 
-                run_dice_evaluation(gt_path, punet_pred_path)
+                dice_evaluation(gt_path, punet_pred_path)
                 print(f"dice for {trg} from {src}-{trg}")
 
 

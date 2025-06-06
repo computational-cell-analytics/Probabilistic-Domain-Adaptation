@@ -8,8 +8,6 @@ import torch
 
 import torch_em
 
-from prob_utils.my_models import clean_folder
-
 
 def punet_prediction(
     input_image_path,
@@ -21,7 +19,7 @@ def punet_prediction(
 ):
     'function that generates predictions from the PUNet'
     os.makedirs(output_pred_path, exist_ok=True)
-    clean_folder(output_pred_path)
+    clean_folder(output_pred_path)  # FIXME
 
     model.eval()
     with torch.no_grad():
@@ -58,11 +56,13 @@ def punet_pseudo_prediction(
     split_name: str = None
 ):
     """Function to use trained punet on test samples (now for pseudo labelling)
-    output_pred_path : Path where predictions will be saved
-    input_image_path : Path where the input images are there
-    model : weights initialised to the model architecture
-    device : cpu or gpu
-    prior_samples : set the number of times we sample from prior net
+
+    Args:
+        output_pred_path : Path where predictions will be saved
+        input_image_path : Path where the input images are there
+        model : weights initialised to the model architecture
+        device : cpu or gpu
+        prior_samples : set the number of times we sample from prior net
     """
 
     os.makedirs(output_pred_path, exist_ok=True)

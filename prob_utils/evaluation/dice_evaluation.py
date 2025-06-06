@@ -3,11 +3,11 @@ from glob import glob
 import numpy as np
 import imageio.v3 as imageio
 
-from prob_utils.my_utils import dice_score
+from ..util import dice_score
 
 
 def run_dice_evaluation(gt_f_path, pred_path):
-    'Dice evaluation for LiveCELL dataset'
+    'Dice evaluation for LIVECell dataset'
     gt_path = gt_f_path + "*"
     gt_dir = glob(gt_path)
 

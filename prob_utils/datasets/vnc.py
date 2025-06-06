@@ -3,14 +3,14 @@ from glob import glob
 from shutil import rmtree
 
 import h5py
-import imageio.v3 as imageio
 import numpy as np
+import imageio.v3 as imageio
 from skimage.measure import label
 
 import torch_em
 from torch_em.data.datasets.util import download_source, unzip, update_kwargs
 
-from .my_segmentation_datasets import default_dual_segmentation_loader
+from . import default_dual_segmentation_loader
 
 
 URL = "https://github.com/unidesigner/groundtruth-drosophila-vnc/archive/refs/heads/master.zip"

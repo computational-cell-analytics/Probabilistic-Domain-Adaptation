@@ -16,7 +16,7 @@ from torch_em.segmentation import (
     ConcatDataset, samples_to_datasets, check_paths, is_segmentation_dataset, _get_default_transform
 )
 
-from prob_utils.my_datasets.my_image_collection_dataset import DualImageCollectionDataset
+from . import DualImageCollectionDataset
 
 
 class DualSegmentationDataset(torch.utils.data.Dataset):

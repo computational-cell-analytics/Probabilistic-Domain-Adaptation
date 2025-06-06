@@ -1,1 +1,1 @@
-from .my_dice_evaluations import run_dice_evaluation, run_lung_dice_evaluation, run_em_dice_evaluation
+from .dice_evaluation import run_dice_evaluation, run_lung_dice_evaluation, run_em_dice_evaluation

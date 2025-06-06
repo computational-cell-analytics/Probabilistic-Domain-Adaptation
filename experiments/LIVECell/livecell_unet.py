@@ -8,8 +8,8 @@ import torch_em
 from torch_em.model import UNet2d
 from torch_em.data.datasets import get_livecell_loader
 
-from prob_utils.my_predictions import unet_prediction
-from prob_utils.my_evaluations import run_dice_evaluation
+from prob_utils.inference import unet_prediction
+from prob_utils.evaluation import run_dice_evaluation
 
 
 def do_unet_training(data_path: str, device, patch_shape=(256, 256)):

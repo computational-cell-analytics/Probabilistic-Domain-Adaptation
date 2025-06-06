@@ -10,7 +10,7 @@ import numpy as np
 
 from torch_em.data.datasets.util import download_source, unzip
 
-from .my_segmentation_datasets import default_dual_segmentation_loader
+from . import default_dual_segmentation_loader
 
 
 URL = "http://www.casser.io/files/lucchi_pp.zip"
