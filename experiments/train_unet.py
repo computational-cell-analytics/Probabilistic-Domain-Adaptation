@@ -6,15 +6,15 @@ from torch_em.data.datasets.light_microscopy.livecell import CELL_TYPES
 from common import get_dataloaders, get_model
 
 
-def train_unet(data_path, dataset_name, **kwargs):
+def train_unet(data_path, dataset_name, patch_shape, **kwargs):
     """Train UNet model.
     """
 
-    train_loader, val_loader = get_dataloaders(
-        data_path=data_path, dataset_name=dataset_name, patch_shape=(512, 512), **kwargs
-    )
-    model = get_model()
     device = "cuda" if torch.cuda.is_available else "cpu"
+    train_loader, val_loader = get_dataloaders(
+        data_path=data_path, dataset_name=dataset_name, patch_shape=patch_shape, **kwargs
+    )
+    model = get_model(dataset_name=dataset_name, device=device)
 
     trainer = torch_em.default_segmentation_trainer(
         name=f"unet-source-{dataset_name}",
@@ -31,13 +31,45 @@ def train_unet(data_path, dataset_name, **kwargs):
 
 
 def train_livecell():
+    # Train source models per cell types
     for cell_type in CELL_TYPES:
-        train_unet(data_path=args.input_path, dataset_name="livecell")
+        train_unet(
+            data_path=args.input_path,
+            dataset_name="livecell",
+            patch_shape=(512, 512),
+            cell_types=[cell_type],
+        )
+
+
+def train_em():
+    # Train source models per mitochondria EM data choices.
+    for subtype in ["mitoem", "vnc", "lucchi", "urocell"]:
+        train_unet(
+            data_path=args.input_path,
+            dataset_name="em",
+            patch_shape=(16, 512, 512),
+            subtype=subtype,
+        )
+
+
+def train_lung_xray():
+    # Train source models per lung dataset choices.
+    for subtype in ["nih", "jsrt1", "jsrt2", "montgomery"]:
+        train_unet(
+            data_path=args.input_path,
+            dataset_name="lung_xray",
+            patch_shape=(512, 512),
+            subtype=subtype,
+        )
 
 
 def main(args):
     if args.dataset_name == "livecell":
         train_livecell()
+    elif args.dataset == "em":
+        train_em()
+    elif args.dataset == "lung_xray":
+        train_lung_xray()
     else:
         raise NotImplementedError
 
