@@ -1,15 +1,13 @@
-channels:
-    - pytorch
-    - conda-forge
 name:
-    domain_adaptation
+    pda
+channels:
+    - conda-forge
 dependencies:
     - affogato
-    - bioimageio.core >=0.5.0
-    - pytorch
+    - bioimageio.core
     - python-elf
-    - cpuonly
-    - python >=3.8,<3.11
+    - python
+    - pytorch
     - tensorboard
     - tifffile
     - torchvision
