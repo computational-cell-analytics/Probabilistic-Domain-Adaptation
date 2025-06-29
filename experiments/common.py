@@ -1,5 +1,5 @@
 import os
-from typing import Union, Tuple
+from typing import Union, Tuple, Literal
 
 import torch
 from torch.utils.data import DataLoader
@@ -7,8 +7,12 @@ from torch.utils.data import DataLoader
 from torch_em.model import UNet2d, UNet3d
 from torch_em.data import datasets, MinForegroundSampler
 
+from prob_utils.models.probabilistic_unet import ProbUNet3D
 
-def get_model(dataset_name: str, device: Union[str, torch.device]) -> torch.nn.Module:
+
+def get_model(
+    dataset_name: str, device: Union[str, torch.device], backbone: Literal["unet", "punet"] = "unet",
+) -> torch.nn.Module:
     """Get the semantic segmentation model.
 
     Args:
@@ -18,24 +22,43 @@ def get_model(dataset_name: str, device: Union[str, torch.device]) -> torch.nn.M
     Returns:
         The segmentation model.
     """
+    if backbone not in ["unet", "punet"]:
+        raise ValueError(backbone)
 
     if dataset_name in ["livecell", "lung_xray"]:
-        model = UNet2d(
-            in_channels=1,
-            out_channels=1,
-            final_activation="Sigmoid",
-            depth=4,
-            initial_features=64
-        )
+        if backbone == "unet":
+            model = UNet2d(
+                in_channels=1,
+                out_channels=1,
+                final_activation="Sigmoid",
+                depth=4,
+                initial_features=64
+            )
+        else:
+            ...
 
     elif dataset_name == "em":
-        model = UNet3d(
-            in_channels=1,
-            out_channels=1,
-            final_activation="Sigmoid",
-            depth=4,
-            initial_features=64
-        )
+        if backbone == "unet":
+            model = UNet3d(
+                in_channels=1,
+                out_channels=1,
+                final_activation="Sigmoid",
+                depth=4,
+                initial_features=64
+            )
+        else:
+            model = ProbUNet3D(
+                in_channels=1,
+                out_channels=1,
+                final_sigmoid=True,
+                layer_order="crb",
+                num_levels=4,
+                f_maps=64,
+                prior_layer_order="cr",
+                posterior_layer_order="cr",
+                encoders_f_maps=64,
+                encoder_num_levels=4,
+            )
 
     else:
         raise NotImplementedError
