@@ -75,9 +75,9 @@ def train_lung_xray(args):
 def main(args):
     if args.dataset_name == "livecell":
         train_livecell(args)
-    elif args.dataset == "em":
+    elif args.dataset_name == "em":
         train_em(args)
-    elif args.dataset == "lung_xray":
+    elif args.dataset_name == "lung_xray":
         train_lung_xray(args)
     else:
         raise NotImplementedError

@@ -240,7 +240,6 @@ class AbstractProb3DUNet(nn.Module):
             return self.fcomb.forward(x, z_posterior), kl_div
 
         elif self.testing:
-
             # print(f"posterior_latent_space mean: {posterior_latent_space.mean}")
             # print(f"posterior_latent_space variance: {posterior_latent_space.variance}")
             # print(f"mean: {self.prior_latent_space.mean}")
@@ -249,7 +248,6 @@ class AbstractProb3DUNet(nn.Module):
             return self.final_activation(self.fcomb.forward(x, z_prior))
 
         elif not self.testing and not self.training:  # Validation
-
             if self.num_flow_steps is not None:
                 z_posterior = z_q
             else:

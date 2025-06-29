@@ -1,11 +1,12 @@
 import torch
 
-import torch_em
-
 from common import get_dataloaders, get_model
 
+from prob_utils.trainer.punet_trainer import PUNet_Trainer
+from prob_utils.models.utils import ELBO
 
-def train_punet(data_path, dataset_name, patch_shape, **kwargs):
+
+def train_punet(data_path, dataset_name, patch_shape, save_root, **kwargs):
     """Train PUNet model.
     """
 
@@ -15,25 +16,35 @@ def train_punet(data_path, dataset_name, patch_shape, **kwargs):
     )
     model = get_model(dataset_name=dataset_name, device=device, backbone="punet")
 
-    name = f"punet-source-{dataset_name}",
+    name = f"punet-source-{dataset_name}"
     if "cell_types" in kwargs:
         cell_type = kwargs["cell_types"][0]
         name += f"-{cell_type}"
 
     if "subtype" in kwargs:
-        subtype = kwargs["subtype"]
-        name += f"-{subtype}"
+        subtypes = kwargs["subtypes"]
+        name += f"-{subtypes}"
 
-    trainer = torch_em.default_segmentation_trainer(
+    # Other stuff for training.
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=10)
+    supervised_loss = ELBO()
+
+    trainer = PUNet_Trainer(
         name=name,
+        save_root=save_root,
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
+        logger=None,
         device=device,
-        learning_rate=1e-4,
-        log_image_interval=100,
+        lr_scheduler=scheduler,
+        optimizer=optimizer,
         mixed_precision=True,
         compile_model=False,
+        log_image_interval=100,
+        loss=supervised_loss,
+        metric=supervised_loss,
     )
     trainer.fit(int(1e5), overwrite_training=False)
 
@@ -45,12 +56,13 @@ def train_em(args):
             data_path=args.input_path,
             dataset_name="em",
             patch_shape=(16, 512, 512),
-            subtype=subtype,
+            subtypes=subtype,
+            save_root=args.save_root,
         )
 
 
 def main(args):
-    if args.dataset == "em":
+    if args.dataset_name == "em":
         train_em(args)
     else:
         raise NotImplementedError

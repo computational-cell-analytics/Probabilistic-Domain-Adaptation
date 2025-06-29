@@ -1,11 +1,14 @@
 from functools import partial
 
+import math
 import numpy as np
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.distributions import Normal, Independent
+
+from torch_em.loss.dice import DiceLossWithLogits
 
 
 class Planar(nn.Module):
@@ -965,3 +968,88 @@ class Fcomb(nn.Module):
 
             output = self.layers(feature_map)
             return self.last_layer(output)
+
+
+# https://github.com/haofuml/cyclical_annealing/blob/master/plot/plot_schedules.ipynb
+# Cyclical Annealing Schedule: A Simple Approach to Mitigating KL Vanishing
+def frange_cycle_linear(start, stop, n_epoch, n_cycle=4, ratio=0.5):
+    L = np.ones(n_epoch)
+    period = n_epoch/n_cycle
+    step = (stop-start)/(period*ratio)  # linear schedule
+
+    for c in range(n_cycle):
+        v, i = start, 0
+        while v <= stop and (int(i+c*period) < n_epoch):
+            L[int(i+c*period)] = v
+            v += step
+            i += 1
+    return L
+
+
+def frange_cycle_sigmoid(start, stop, n_epoch, n_cycle=4, ratio=0.5):
+    L = np.ones(n_epoch)
+    period = n_epoch/n_cycle
+    step = (stop-start)/(period*ratio)  # step is in [0,1]
+
+    # transform into [-6, 6] for plots: v*12.-6.
+
+    for c in range(n_cycle):
+        v, i = start, 0
+        while v <= stop:
+            L[int(i+c*period)] = 1.0 / (1.0 + np.exp(- (v*12.-6.)))
+            v += step
+            i += 1
+    return L
+
+
+#  function  = 1 − cos(a), where a scans from 0 to pi/2
+def frange_cycle_cosine(start, stop, n_epoch, n_cycle=4, ratio=0.5):
+    L = np.ones(n_epoch)
+    period = n_epoch/n_cycle
+    step = (stop-start)/(period*ratio)  # step is in [0,1]
+
+    # transform into [0, pi] for plots:
+    for c in range(n_cycle):
+        v, i = start, 0
+        while v <= stop:
+            L[int(i+c*period)] = 0.5 - 0.5 * math.cos(v * math.pi)
+            v += step
+            i += 1
+    return L
+
+
+class ELBO(nn.Module):
+    """Combination of BCE and KL Divergence losses"""
+    def __init__(
+        self,
+        start=1.0,
+        stop=10.0,
+        n_epoch=300000,
+        n_cycle=4,
+        ratio=0.5,
+        beta_scheduler='cosine',
+        beta_magnitude=10.0,
+        rl_swap=True,
+        **kwargs
+    ):
+        super().__init__()
+
+        if rl_swap:
+            self.reconstruction_loss = DiceLossWithLogits()
+        else:
+            self.reconstruction_loss = nn.BCEWithLogitsLoss(size_average=False, reduce=False, reduction=None)
+
+        if beta_scheduler == "cosine":
+            self.beta_schedule = beta_magnitude * frange_cycle_cosine(start, stop, n_epoch, n_cycle, ratio)
+        elif beta_scheduler == "linear":
+            self.beta_schedule = beta_magnitude * frange_cycle_linear(start, stop, n_epoch, n_cycle, ratio)
+        elif beta_scheduler == "sigmoid":
+            self.beta_schedule = beta_magnitude * frange_cycle_sigmoid(start, stop, n_epoch, n_cycle, ratio)
+
+    def forward(self, input, target, kl_div, iteration_num=None):
+        reconstruction_loss = self.reconstruction_loss(input, target)
+
+        if iteration_num is None:
+            return - (reconstruction_loss + 1e-5 * kl_div)
+        else:
+            return - (reconstruction_loss + self.beta_schedule[iteration_num] * kl_div)

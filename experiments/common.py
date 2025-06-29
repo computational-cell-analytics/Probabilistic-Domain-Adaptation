@@ -11,7 +11,10 @@ from prob_utils.models.probabilistic_unet import ProbUNet3D
 
 
 def get_model(
-    dataset_name: str, device: Union[str, torch.device], backbone: Literal["unet", "punet"] = "unet",
+    dataset_name: str,
+    device: Union[str, torch.device],
+    backbone: Literal["unet", "punet"] = "unet",
+    testing: bool = False,
 ) -> torch.nn.Module:
     """Get the semantic segmentation model.
 
@@ -58,6 +61,7 @@ def get_model(
                 posterior_layer_order="cr",
                 encoders_f_maps=64,
                 encoder_num_levels=4,
+                testing=testing,
             )
 
     else:
@@ -101,6 +105,8 @@ def get_dataloaders(
             train_loader = datasets.get_mitoem_loader(
                 path=data_path, splits="train", patch_shape=patch_shape, batch_size=2, ndim=3,
                 binary=True, sampler=sampler, download=True, num_workers=16, shuffle=True,
+                # HACK
+                n_samples=100,
             )
             val_loader = datasets.get_mitoem_loader(
                 path=data_path, splits="val", patch_shape=patch_shape, batch_size=1, ndim=3,
@@ -133,6 +139,8 @@ def get_dataloaders(
                 path=data_path, patch_shape=patch_shape, batch_size=1, ndim=3, split="test",
                 binary=True, sampler=sampler, download=True, num_workers=16, shuffle=True,
             )
+        else:
+            raise RuntimeError
 
     elif dataset_name == "lung_xray":
         # TODO: Add nih, jsrt1, jsrt2, montgomery.
