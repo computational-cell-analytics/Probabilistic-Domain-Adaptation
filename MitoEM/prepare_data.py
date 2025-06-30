@@ -48,7 +48,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--data", type=str, default="/mnt/lustre-grete/usr/u16934/data/mitoem",
+        "--data", type=str, default="/mnt/lustre-grete/usr/u16934/data",
         help="Path where the dataset will be downloaded by the functions"
     )
     args = parser.parse_args()
