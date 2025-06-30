@@ -1,6 +1,4 @@
 channels:
-    - pytorch
-    - nvidia
     - conda-forge
 name:
     domain_adaptation
@@ -8,8 +6,7 @@ dependencies:
     - affogato
     - bioimageio.core >=0.5.0
     - python-elf
-    - python >=3.8,<3.11
-    - pytorch-cuda=11.6  # you may need to update the pytorch version to match your system
+    - pytorch
     - tensorboard
     - tifffile
     - torchvision
