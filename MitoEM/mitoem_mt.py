@@ -21,10 +21,7 @@ def my_weak_augmentations(p=0.25):
         transforms.RandomApply([GaussianBlur()], p=p),
         transforms.RandomApply([AdditiveGaussianNoise(scale=(0, 0.15), clip_kwargs=False)], p=p),
     ])
-    return get_raw_transform(
-        normalizer=norm,
-        augmentation1=aug1
-    )
+    return get_raw_transform(normalizer=norm, augmentation1=aug1)
 
 
 def get_dual_loaders(
@@ -90,8 +87,13 @@ def get_dual_loaders(
             sampler=my_sampler,
             augmentation1=my_augs,
             augmentation2=my_augs,
-            download=True
+            download=True,
+            num_workers=16,
+            shuffle=True,
         )
+
+    elif em_data == "uro_cell":
+        ...
 
     return train_loader, val_loader
 
