@@ -2,143 +2,30 @@ import os
 import argparse
 
 import torch
-from torchvision import transforms
 
-from torch_em.data import MinForegroundSampler
-from torch_em.transform.raw import get_raw_transform, AdditiveGaussianNoise, GaussianBlur
-
+from prob_utils.my_utils import DummyLoss
 from prob_utils.my_models import ProbabilisticUnet
 from prob_utils.my_predictions import punet_prediction
 from prob_utils.my_evaluations import run_em_dice_evaluation
-from prob_utils.my_utils import my_standardize_torch, DummyLoss
 from prob_utils.my_trainer import MeanTeacherTrainer, MeanTeacherLogger
-from prob_utils.my_datasets import get_vnc_mito_loader, get_lucchi_loader, get_uro_cell_loader
 
-
-def my_weak_augmentations(p=0.25):
-    norm = my_standardize_torch
-    aug1 = transforms.Compose([
-        my_standardize_torch,
-        transforms.RandomApply([GaussianBlur()], p=p),
-        transforms.RandomApply([AdditiveGaussianNoise(scale=(0, 0.15), clip_kwargs=False)], p=p),
-    ])
-    return get_raw_transform(normalizer=norm, augmentation1=aug1)
-
-
-def get_dual_loaders(
-    em_data: str,
-    root_input_dir: str,
-    patch_shape=(1, 512, 512),
-    my_augs=my_weak_augmentations(),
-    my_sampler=MinForegroundSampler(min_fraction=0.05)
-):
-    path = os.path.join(root_input_dir, em_data)
-
-    if em_data == "vnc":
-        train_loader = get_vnc_mito_loader(
-            path=path, partition="tr",
-            batch_size=4,
-            patch_shape=patch_shape,
-            ndim=2,
-            binary=True,
-            sampler=my_sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-            n_samples=400,
-        )
-
-        val_loader = get_vnc_mito_loader(
-            path=path,
-            partition="ts",
-            batch_size=1,
-            patch_shape=patch_shape,
-            ndim=2,
-            binary=True,
-            sampler=my_sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-            n_samples=400,
-        )
-
-    elif em_data == "lucchi":
-        train_loader = get_lucchi_loader(
-            path=path,
-            split="train",
-            batch_size=4,
-            ndim=2,
-            patch_shape=patch_shape,
-            sampler=my_sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-        )
-
-        val_loader = get_lucchi_loader(
-            path=path,
-            split="test",
-            batch_size=1,
-            ndim=2,
-            patch_shape=patch_shape,
-            sampler=my_sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-        )
-
-    elif em_data == "urocell":
-        sampler = MinForegroundSampler(min_fraction=0.01)
-        train_loader = get_uro_cell_loader(
-            path=path,
-            split="train",
-            patch_shape=patch_shape,
-            batch_size=4,
-            ndim=2,
-            sampler=sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-            n_samples=400,
-        )
-
-        val_loader = get_uro_cell_loader(
-            path=path,
-            split="val",
-            patch_shape=patch_shape,
-            batch_size=1,
-            ndim=2,
-            sampler=sampler,
-            augmentation1=my_augs,
-            augmentation2=my_augs,
-            download=True,
-            num_workers=16,
-            shuffle=True,
-            n_samples=400,
-        )
-
-    return train_loader, val_loader
+from common import get_dual_loaders, my_weak_augmentations
 
 
 def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
     for em_data in em_types:
         print(f"Training on {em_data} using Mean-Teacher scheme")
-        train_loader, val_loader = get_dual_loaders(em_data=em_data, root_input_dir=data_path)
+        train_loader, val_loader = get_dual_loaders(
+            em_data=em_data,
+            root_input_dir=data_path,
+            weak_augs=my_weak_augmentations(),
+            strong_augs=my_weak_augmentations(),
+        )
 
         my_ckpt = os.path.join(source_ckpt_path, "punet-source-mitoem", "best.pt")
 
-        if os.path.exists(my_ckpt) is False:
+        if not os.path.exists(my_ckpt):
             print("The checkpoint directory couldn't be found / source network hasn't been trained")
             continue
 
@@ -244,10 +131,7 @@ def do_mean_teacher_evaluations(data_path: str, pred_path: str):
 
 
 def main(args):
-    try:
-        print(torch.cuda.get_device_name() if torch.cuda.is_available() else "GPU not available, hence running on CPU")
-    except AssertionError:
-        pass
+    print(torch.cuda.get_device_name() if torch.cuda.is_available() else "GPU not available, hence running on CPU")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.train:

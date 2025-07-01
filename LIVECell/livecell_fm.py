@@ -1,11 +1,13 @@
 import os
 import argparse
-import numpy as np
 from glob import glob
-import imageio.v2 as imageio
+
+import numpy as np
+import imageio.v3 as imageio
 
 import torch
 from torchvision import transforms
+
 from torch_em.transform.raw import get_raw_transform, AdditiveGaussianNoise, GaussianBlur, RandomContrast
 
 from prob_utils.my_models import ProbabilisticUnet
@@ -37,6 +39,7 @@ def compute_class_distribution(root_folder):
     assert np.isclose(bg_frequency + fg_frequency, 1.0)
     return [bg_frequency, fg_frequency]
 
+
 def my_weak_augmentations(p=0.25):
     norm = my_standardize_torch
     aug1 = transforms.Compose([
@@ -48,6 +51,7 @@ def my_weak_augmentations(p=0.25):
         normalizer=norm,
         augmentation1=aug1
     )
+
 
 def my_strong_augmentations(p=0.9):
     norm = my_standardize_torch
@@ -62,44 +66,49 @@ def my_strong_augmentations(p=0.9):
         augmentation1=aug1
     )
 
-def get_livecell_loaders(path:str, ctype:list, patch_shape=(512,512), 
-                         my_weak_augs=my_weak_augmentations(), 
-                         my_strong_augs=my_strong_augmentations()):
 
+def get_livecell_loaders(
+    path: str,
+    ctype: list,
+    patch_shape=(512, 512),
+    my_weak_augs=my_weak_augmentations(),
+    my_strong_augs=my_strong_augmentations()
+):
     train_loader = get_dual_livecell_loader(
-                        path=path, 
-                        binary=True, 
-                        split='train', 
-                        patch_shape=patch_shape,
-                        batch_size=2, 
-                        cell_types=ctype, 
-                        augmentation1=my_weak_augs, 
-                        augmentation2=my_strong_augs,
-                        download=True
-                    )
-    
+        path=path,
+        binary=True,
+        split='train',
+        patch_shape=patch_shape,
+        batch_size=2,
+        cell_types=ctype,
+        augmentation1=my_weak_augs,
+        augmentation2=my_strong_augs,
+        download=True
+    )
+
     val_loader = get_dual_livecell_loader(
-                        path=path, 
-                        binary=True, 
-                        split='val', 
-                        patch_shape=patch_shape, 
-                        batch_size=1, 
-                        cell_types=ctype, 
-                        augmentation1=my_weak_augs, 
-                        augmentation2=my_strong_augs,
-                        download=True
-                    )
-    
+        path=path,
+        binary=True,
+        split='val',
+        patch_shape=patch_shape,
+        batch_size=1,
+        cell_types=ctype,
+        augmentation1=my_weak_augs,
+        augmentation2=my_strong_augs,
+        download=True
+    )
+
     return train_loader, val_loader
 
-def do_fixmatch_training(args, device, data_path:str, source_ckpt_path:str, pseudo_labels:str, use_distro_alignment = True):
 
+def do_fixmatch_training(
+    args, device, data_path: str, source_ckpt_path: str, pseudo_labels: str, use_distro_alignment=True
+):
     cell_types = ['A172', 'BT474', 'BV2', 'Huh7', 'MCF7', 'SHSY5Y', 'SkBr3', 'SKOV3']
 
     for trg in cell_types:
         for src in cell_types:
-            if src!=trg:
-
+            if src != trg:
                 print(f"Transferring {src} network learnings on {trg} using FixMatch")
 
                 my_ckpt = source_ckpt_path + f"punet-source-livecell-{src}/best.pt"
@@ -107,85 +116,79 @@ def do_fixmatch_training(args, device, data_path:str, source_ckpt_path:str, pseu
                     print("The checkpoint directory couldn't be found/source network hasn't been trained")
                     continue
 
-
                 if use_distro_alignment:
                     print(f"Getting scores for source-{src} at targets-{trg}")
                     pred_folder = pseudo_labels + f"punet_source_predictions/{src}/annotations/livecell_train_val_images/{trg}"
                     src_dist = compute_class_distribution(pred_folder)
                 else:
                     src_dist = None
-                
 
                 train_loader, val_loader = get_livecell_loaders(path=data_path, ctype=[trg])
-                
+
                 model = ProbabilisticUnet(
-                            input_channels=1, 
-                            num_classes=1, 
-                            num_filters=[64,128,256,512], 
-                            latent_dim=6, 
-                            no_convs_fcomb=3, 
-                            beta=1.0, 
-                            rl_swap=True, 
-                            consensus_masking=args.consensus
-                        )
-                optimizer = torch.optim.Adam(model.parameters(), lr=1e-7)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=10, verbose=True)
+                    input_channels=1,
+                    num_classes=1,
+                    num_filters=[64, 128, 256, 512],
+                    latent_dim=6,
+                    no_convs_fcomb=3,
+                    beta=1.0,
+                    rl_swap=True,
+                    consensus_masking=args.consensus
+                )
+                optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=10)
                 model.to(device)
-                
+
                 if args.consensus is True and args.masking is False:
                     my_name = f"fixmatch-livecell-source-{src}-target-{trg}-consensus-weighting"
-
-                elif args.masking is True and args.masking is True:
+                elif args.consensus is True and args.masking is True:
                     my_name = f"fixmatch-livecell-source-{src}-target-{trg}-consensus-masking"
-                    
                 else:
                     my_name = f"fixmatch-livecell-source-{src}-target-{trg}"
 
                 trainer = FixMatchTrainer(
-                    name = my_name,
-                    ckpt_model = my_ckpt,
-                    source_distribution = src_dist,
-                    train_loader = train_loader,
-                    val_loader = val_loader,
-                    model = model,
-                    optimizer = optimizer,
-                    loss = DummyLoss(),
-                    metric = DummyLoss(),
-                    device = device,
-                    lr_scheduler = scheduler,
-                    logger = FixMatchLogger,
-                    mixed_precision = True,
-                    log_image_interval = 10,
+                    name=my_name,
+                    ckpt_model=my_ckpt,
+                    source_distribution=src_dist,
+                    train_loader=train_loader,
+                    val_loader=val_loader,
+                    model=model,
+                    optimizer=optimizer,
+                    loss=DummyLoss(),
+                    metric=DummyLoss(),
+                    device=device,
+                    lr_scheduler=scheduler,
+                    logger=FixMatchLogger,
+                    mixed_precision=True,
+                    log_image_interval=10,
                     do_consensus_masking=args.masking
                 )
 
                 n_iterations = 10000
                 trainer.fit(n_iterations)
 
-def do_fixmatch_predictions(args, device, data_path:str, pred_path:str):
 
+def do_fixmatch_predictions(args, device, data_path: str, pred_path: str):
     cell_list = ['A172', 'BT474', 'BV2', 'Huh7', 'MCF7', 'SHSY5Y', 'SkBr3', 'SKOV3']
 
     model = ProbabilisticUnet(
-                input_channels=1,
-                num_classes=1,
-                num_filters=[64,128,256,512],
-                latent_dim=6,
-                no_convs_fcomb=3,
-                beta=1.0,
-                rl_swap=True
-            )
+        input_channels=1,
+        num_classes=1,
+        num_filters=[64, 128, 256, 512],
+        latent_dim=6,
+        no_convs_fcomb=3,
+        beta=1.0,
+        rl_swap=True
+    )
 
     for trg in cell_list:
         for src in cell_list:
-            if src!=trg:
+            if src != trg:
 
                 if args.consensus is True and args.masking is False:
                     model_save_dir = f"fixmatch-livecell-source-{src}-target-{trg}-consensus-weighting/best.pt"
-
                 elif args.masking is True and args.masking is True:
                     model_save_dir = f"fixmatch-livecell-source-{src}-target-{trg}-consensus-masking/best.pt"
-                    
                 else:
                     model_save_dir = f"fixmatch-livecell-source-{src}-target-{trg}/best.pt"
                 
@@ -193,7 +196,9 @@ def do_fixmatch_predictions(args, device, data_path:str, pred_path:str):
                     print("The model couldn't be found/hasn't been trained yet")
                     continue
 
-                model_state = torch.load(model_save_dir, map_location=torch.device('cpu'))["model_state"]
+                model_state = torch.load(
+                    model_save_dir, map_location=torch.device('cpu'), weights_only=False
+                )["model_state"]
                 model.load_state_dict(model_state)
                 model.to(device)
 
@@ -202,17 +207,13 @@ def do_fixmatch_predictions(args, device, data_path:str, pred_path:str):
 
                 punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device, prior_samples=16)
 
-def do_fixmatch_evaluations(data_path:str, pred_path:str):
 
+def do_fixmatch_evaluations(data_path: str, pred_path: str):
     cell_list = ['A172', 'BT474', 'BV2', 'Huh7', 'MCF7', 'SHSY5Y', 'SkBr3', 'SKOV3']
-
     for trg in cell_list:
-
         gt_path = data_path + f"annotations/livecell_test_images/{trg}/"
-
         for src in cell_list:
-            if src!=trg:
-
+            if src != trg:
                 punet_pred_path = pred_path + f"fixmatch/source-{src}-target-{trg}/"
 
                 if os.path.exists(punet_pred_path) is False:
@@ -222,13 +223,11 @@ def do_fixmatch_evaluations(data_path:str, pred_path:str):
                 run_dice_evaluation(gt_path, punet_pred_path)
                 print(f"dice for {trg} from {src}-{trg}")
 
+
 def main(args):
-    try:
-        print(torch.cuda.get_device_name() if torch.cuda.is_available() else "GPU not available, hence running on CPU")
-    except AssertionError:
-        pass
-    device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
-    
+    print(torch.cuda.get_device_name() if torch.cuda.is_available() else "GPU not available, hence running on CPU")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if args.train:
         print("Training PUNet on Fixmatch framework on LiveCELL dataset")
         do_fixmatch_training(args, data_path=args.data, source_ckpt_path=args.source_checkpoints, pseudo_labels=args.pred_path, device=device)
@@ -240,6 +239,7 @@ def main(args):
     if args.evaluate:
         print("Evaluating the Fixmatch predictions of LiveCELL dataset")
         do_fixmatch_evaluations(data_path=args.data, pred_path=args.pred_path)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
