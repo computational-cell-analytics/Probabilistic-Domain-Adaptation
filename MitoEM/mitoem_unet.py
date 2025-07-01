@@ -43,14 +43,14 @@ def do_unet_training(device, data_path: str, save_root: str):
 
 def do_unet_predictions(device, data_path: str, pred_path: str, em_type: str, save_root: str):
     root_output = os.path.join(pred_path, "unet_predictions")
+    output_path = os.path.join(root_output, em_type)
 
     if em_type == "lucchi":
         input_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_In", "*")
-        output_path = os.path.join(root_output, "lucchi")
-
     elif em_type == "vnc":
         input_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "raw", "*")
-        output_path = os.path.join(root_output, "vnc")
+    elif em_type == "urocell":
+        input_path = os.path.join(data_path, "urocell", "preprocessed", "*_image.tif")
 
     model = UNet2d(
         in_channels=1,
@@ -71,18 +71,17 @@ def do_unet_predictions(device, data_path: str, pred_path: str, em_type: str, sa
 
 
 def do_unet_evaluations(data_path: str, pred_path: str, em_type: str):
-
-    root_output = pred_path + "unet_predictions/"
+    root_output = os.path.join(pred_path, "unet_predictions")
+    output_path = os.path.join(root_output, em_type)
 
     if em_type == "lucchi":
-        gt_path = data_path + "lucchi/Lucchi++/Test_Out/"
-        output_path = root_output + "lucchi"
-
+        gt_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_Out", "*")
     elif em_type == "vnc":
-        gt_path = data_path + "vnc/groundtruth-drosophila-vnc-master/stack1/mitochondria/"
-        output_path = root_output + "vnc/"
+        gt_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "mitochondria", "*")
+    elif em_type == "urocell":
+        gt_path = os.path.join(data_path, "urocell", "preprocessed", "*_gt.tif")
 
-    run_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, model=em_type)
+    run_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, subtype=em_type)
 
 
 def main(args):
@@ -94,15 +93,16 @@ def main(args):
         do_unet_training(data_path=os.path.join(args.data, "mitoem"), device=device, save_root=args.save_root)
 
     if args.predict:
-        print("Getting predictions on Lucchi / VNC datasets from UNet trained on MitoEM")
-        for em_type in ["vnc", "lucchi"]:
+        print("Getting predictions on Lucchi / VNC / UroCell datasets from UNet trained on MitoEM")
+        for em_type in ["vnc", "lucchi", "urocell"]:
             do_unet_predictions(
                 data_path=args.data, pred_path=args.pred_path, device=device, em_type=em_type, save_root=args.save_root,
             )
 
     if args.evaluate:
         print("Evaluating the UNet predictions")
-        do_unet_evaluations(data_path=args.data, pred_path=args.pred_path)
+        for em_type in ["vnc", "lucchi", "urocell"]:
+            do_unet_evaluations(data_path=args.data, pred_path=args.pred_path, em_type=em_type)
 
 
 if __name__ == "__main__":

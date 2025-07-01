@@ -9,3 +9,4 @@ from .my_jsrt1 import get_jsrt_s1_loader
 from .my_jsrt2 import get_jsrt_s2_loader
 from .my_nih import get_nih_loader
 from .my_montgomery import get_montgomery_loader
+from .my_urocell import get_uro_cell_loader

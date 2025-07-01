@@ -1,8 +1,10 @@
 import torch
 import numpy as np
 
+
 class DummyLoss(torch.nn.Module):
     pass
+
 
 def my_standardize_torch(tensor, mean=None, std=None, axis=None, eps=1e-7):
     mean = tensor.mean() if mean is None else mean
@@ -10,6 +12,7 @@ def my_standardize_torch(tensor, mean=None, std=None, axis=None, eps=1e-7):
     std = tensor.std() if std is None else std
     tensor /= (std + eps)
     return tensor
+
 
 def dice_score(segmentation, groundtruth, threshold_seg=None, threshold_gt=None):
     """ Compute the dice score between binarized segmentation and ground-truth.

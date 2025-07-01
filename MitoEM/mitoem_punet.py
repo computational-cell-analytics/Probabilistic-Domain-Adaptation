@@ -6,8 +6,8 @@ import torch
 from prob_utils.my_utils import DummyLoss
 from prob_utils.my_models import ProbabilisticUnet
 from prob_utils.my_predictions import punet_prediction
+from prob_utils.my_evaluations import run_dice_evaluation
 from prob_utils.my_trainer import PUNetTrainer, PUNetLogger
-from prob_utils.my_evaluations import run_em_dice_evaluation
 
 from common import get_mitoem_loaders
 
@@ -51,14 +51,14 @@ def do_punet_training(device, data_path: str, save_root: str):
 
 def do_punet_predictions(device, data_path: str, pred_path: str, em_type: str, save_root: str):
     root_output = os.path.join(pred_path, "punet_predictions")
+    output_path = os.path.join(root_output, em_type)
 
     if em_type == "lucchi":
         input_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_In", "*")
-        output_path = os.path.join(root_output, "lucchi")
-
     elif em_type == "vnc":
         input_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "raw", "*")
-        output_path = os.path.join(root_output, "vnc")
+    elif em_type == "urocell":
+        input_path = os.path.join(data_path, "urocell", "preprocessed", "*_image.tif")
 
     model = ProbabilisticUnet(
         input_channels=1,
@@ -79,18 +79,18 @@ def do_punet_predictions(device, data_path: str, pred_path: str, em_type: str, s
     punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device)
 
 
-def do_punet_evaluations(data_path: str, pred_path: str):
-    em_types = ["vnc", "lucchi"]
-    for em_data in em_types:
-        root_output = pred_path + "punet_predictions/"
-        output_path = root_output + f"{em_data}/"
+def do_punet_evaluations(data_path: str, pred_path: str, em_type: str):
+    root_output = os.path.join(pred_path, "punet_predictions")
+    output_path = os.path.join(root_output, em_type)
 
-        if em_data == "lucchi":
-            gt_path = data_path + "lucchi/Lucchi++/Test_Out/"
-        elif em_data == "vnc":
-            gt_path = data_path + "vnc/groundtruth-drosophila-vnc-master/stack1/mitochondria/"
+    if em_type == "lucchi":
+        gt_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_Out", "*")
+    elif em_type == "vnc":
+        gt_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "mitochondria", "*")
+    elif em_type == "urocell":
+        gt_path = os.path.join(data_path, "urocell", "preprocessed", "*_gt.tif")
 
-        run_em_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, model=em_data)
+    run_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, subtype=em_type)
 
 
 def main(args):
@@ -102,15 +102,16 @@ def main(args):
         do_punet_training(data_path=os.path.join(args.data, "mitoem"), device=device, save_root=args.save_root)
 
     if args.predict:
-        print("Getting predictions on Lucchi / VNC datasets from PUNet trained on MitoEM")
-        for em_type in ["vnc", "lucchi"]:
+        print("Getting predictions on Lucchi / VNC / UroCell datasets from PUNet trained on MitoEM")
+        for em_type in ["vnc", "lucchi", "urocell"]:
             do_punet_predictions(
                 data_path=args.data, pred_path=args.pred_path, device=device, em_type=em_type, save_root=args.save_root,
             )
 
     if args.evaluate:
         print("Evaluating the PUNet predictions")
-        do_punet_evaluations(data_path=args.data, pred_path=args.pred_path)
+        for em_type in ["vnc", "lucchi", "urocell"]:
+            do_punet_evaluations(data_path=args.data, pred_path=args.pred_path, em_type=em_type)
 
 
 if __name__ == "__main__":

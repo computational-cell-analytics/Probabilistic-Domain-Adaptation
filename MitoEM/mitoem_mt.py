@@ -3,6 +3,7 @@ import argparse
 
 import torch
 from torchvision import transforms
+
 from torch_em.data import MinForegroundSampler
 from torch_em.transform.raw import get_raw_transform, AdditiveGaussianNoise, GaussianBlur
 
@@ -11,7 +12,7 @@ from prob_utils.my_predictions import punet_prediction
 from prob_utils.my_evaluations import run_em_dice_evaluation
 from prob_utils.my_utils import my_standardize_torch, DummyLoss
 from prob_utils.my_trainer import MeanTeacherTrainer, MeanTeacherLogger
-from prob_utils.my_datasets import get_vnc_mito_loader, get_lucchi_loader
+from prob_utils.my_datasets import get_vnc_mito_loader, get_lucchi_loader, get_uro_cell_loader
 
 
 def my_weak_augmentations(p=0.25):
@@ -36,7 +37,7 @@ def get_dual_loaders(
     if em_data == "vnc":
         train_loader = get_vnc_mito_loader(
             path=path, partition="tr",
-            batch_size=2,
+            batch_size=4,
             patch_shape=patch_shape,
             ndim=2,
             binary=True,
@@ -46,6 +47,7 @@ def get_dual_loaders(
             download=True,
             num_workers=16,
             shuffle=True,
+            n_samples=400,
         )
 
         val_loader = get_vnc_mito_loader(
@@ -61,6 +63,7 @@ def get_dual_loaders(
             download=True,
             num_workers=16,
             shuffle=True,
+            n_samples=400,
         )
 
     elif em_data == "lucchi":
@@ -92,22 +95,51 @@ def get_dual_loaders(
             shuffle=True,
         )
 
-    elif em_data == "uro_cell":
-        ...
+    elif em_data == "urocell":
+        sampler = MinForegroundSampler(min_fraction=0.01)
+        train_loader = get_uro_cell_loader(
+            path=path,
+            split="train",
+            patch_shape=patch_shape,
+            batch_size=4,
+            ndim=2,
+            sampler=sampler,
+            augmentation1=my_augs,
+            augmentation2=my_augs,
+            download=True,
+            num_workers=16,
+            shuffle=True,
+            n_samples=400,
+        )
+
+        val_loader = get_uro_cell_loader(
+            path=path,
+            split="val",
+            patch_shape=patch_shape,
+            batch_size=1,
+            ndim=2,
+            sampler=sampler,
+            augmentation1=my_augs,
+            augmentation2=my_augs,
+            download=True,
+            num_workers=16,
+            shuffle=True,
+            n_samples=400,
+        )
 
     return train_loader, val_loader
 
 
 def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str):
-    em_types = ["vnc", "lucchi"]
+    em_types = ["vnc", "lucchi", "urocell"]
     for em_data in em_types:
         print(f"Training on {em_data} using Mean-Teacher scheme")
-        train_loader, val_loader = get_dual_loaders(em_data=em_data)
+        train_loader, val_loader = get_dual_loaders(em_data=em_data, root_input_dir=data_path)
 
         my_ckpt = os.path.join(source_ckpt_path, "punet-source-mitoem", "best.pt")
 
         if os.path.exists(my_ckpt) is False:
-            print("The checkpoint directory couldn't be found/source network hasn't been trained")
+            print("The checkpoint directory couldn't be found / source network hasn't been trained")
             continue
 
         model = ProbabilisticUnet(
@@ -122,20 +154,19 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
         )
         model.to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=10)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=5)
 
         if args.consensus is True and args.masking is False:
-            my_name = f"mean-teacher-lung-source-mitoem-target-{em_data}-consensus-weighting"
-
-        elif args.masking is True and args.masking is True:
-            my_name = f"mean-teacher-lung-source-mitoem-target-{em_data}-consensus-masking"
-
+            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-weighting"
+        elif args.consensus is True and args.masking is True:
+            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-masking"
         else:
-            my_name = f"mean-teacher-lung-source-mitoem-target-{em_data}"
+            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}"
 
         trainer = MeanTeacherTrainer(
             name=my_name,
+            save_root=args.save_root,
             ckpt_teacher=my_ckpt,
             ckpt_model=my_ckpt,
             train_loader=train_loader,
@@ -148,16 +179,17 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
             lr_scheduler=scheduler,
             logger=MeanTeacherLogger,
             mixed_precision=True,
+            compile_model=False,
             log_image_interval=1000,
             do_consensus_masking=args.masking,
         )
 
         n_iterations = 10000
-        trainer.fit(n_iterations)
+        trainer.fit(n_iterations, overwrite_training=False)
 
 
 def do_mean_teacher_predictions(device, data_path: str, pred_path: str):
-    em_types = ["vnc", "lucchi"]
+    em_types = ["vnc", "lucchi", "urocell"]
     model = ProbabilisticUnet(
         input_channels=1,
         num_classes=1,
@@ -241,13 +273,21 @@ if __name__ == "__main__":
     parser.add_argument("--consensus", action='store_true', help="Activates Consensus (Weighting) in the network")
     parser.add_argument("--masking", action='store_true', help="Uses Consensus Masking in the training")
 
-    parser.add_argument("--data", default="~/data/", type=str, help="Path where the dataset already exists for MitoEM")
     parser.add_argument(
-        "--source_checkpoints", type=str, default="checkpoints/",
+        "--data", type=str, default="/mnt/lustre-grete/usr/u16934/data",
         help="Path where the dataset already exists/will be downloaded by the dataloader"
     )
     parser.add_argument(
-        "--pred_path", type=str, default="~/predictions/mitoem/", help="Path where predictions will be saved"
+        "--source_checkpoints", type=str, default="checkpoints",
+        help="Path where the pretrained source model checkpoints already exists"
+    )
+    parser.add_argument(
+        "--save_root", default="/mnt/lustre-grete/usr/u16934/models", type=str,
+        help="Path where the trained models are stored."
+    )
+    parser.add_argument(
+        "--pred_path", type=str, default="/mnt/lustre-grete/usr/u16934/experiments/pda/source-mitoem",
+        help="Path where predictions will be saved."
     )
 
     args = parser.parse_args()

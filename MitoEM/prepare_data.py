@@ -1,7 +1,12 @@
 import os
 import argparse
 
+import numpy as np
+import imageio.v3 as imageio
+
 from torch_em.data.datasets.util import download_source, unzip
+
+from elf.io import open_file
 
 
 def download_lucchi_data(path, download=True):
@@ -40,9 +45,36 @@ def download_vnc_data(path, download=True):
     assert os.path.exists(root)
 
 
+def download_urocell_data(path, download=True):
+    from torch_em.data.datasets.electron_microscopy.uro_cell import get_uro_cell_paths
+    paths = get_uro_cell_paths(path=os.path.join(path, "urocell"), target="mito", download=download)
+
+    # NOTE: Use the last volume for testing purpose
+    paths = sorted(paths)
+    paths = [paths[-1]]
+
+    base_dir = os.path.join(path, "urocell", "preprocessed")
+    os.makedirs(base_dir, exist_ok=True)
+
+    # The simplest strategy would be to create slices, since we deal with 2d models.
+    for path in paths:
+        f = open_file(path, mode="r")
+        raw = f["raw"][:]
+        labels = f["labels/mito"][:]
+
+        counter = 0
+        for r, l in zip(raw, labels):
+            if len(np.unique(l)) > 1:  # If there is some foreground, let's use the slices.
+                binary_label = (l > 0).astype("uint8")
+                imageio.imwrite(os.path.join(base_dir, f"{counter:05}_image.tif"), r, compression="zlib")
+                imageio.imwrite(os.path.join(base_dir, f"{counter:05}_gt.tif"), binary_label, compression="zlib")
+                counter += 1
+
+
 def main(args):
     download_lucchi_data(path=args.data)
     download_vnc_data(path=args.data)
+    download_urocell_data(path=args.data)
 
 
 if __name__ == "__main__":

@@ -36,15 +36,27 @@ def punet_prediction(
         img_name = os.path.basename(img_path)
         input_img = imageio.imread(img_path)
 
-        pred = predict_with_halo(
-            input_=input_img,
-            model=model,
-            gpu_ids=[device],
-            block_shape=(384, 384),
-            halo=(64, 64),
-            prediction_function=_custom_punet_prediction,
-            output=np.zeros(input_img.shape),
-        )
+        tiling = True
+        if tiling:
+            pred = predict_with_halo(
+                input_=input_img,
+                model=model,
+                gpu_ids=[device],
+                block_shape=(384, 384),
+                halo=(64, 64),
+                prediction_function=_custom_punet_prediction,
+                output=np.zeros(input_img.shape),
+            )
+        else:
+            input_img = torch_em.transform.raw.standardize(input_img)
+            input_img = torch.from_numpy(input_img)
+            input_img = input_img.unsqueeze(0).unsqueeze(0).to(device)
+
+            model.forward(input_img, None, training=False)
+
+            samples_per_patch = [mysig(model.sample(testing=True)) for _ in range(prior_samples)]
+            pred = torch.stack(samples_per_patch, dim=0).sum(dim=0) / prior_samples
+            pred = pred.detach().cpu().numpy().squeeze()
 
         output_path = os.path.join(output_pred_path, f"{img_name[:-4]}.tif")
         imageio.imwrite(output_path, pred, compression="zlib")
