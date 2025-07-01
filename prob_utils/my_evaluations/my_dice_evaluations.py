@@ -30,7 +30,7 @@ def run_dice_evaluation(gt_f_path, pred_path, subtype=None):
         if subtype == "lucchi":
             gt = gt[:, :, 0] if gt.ndim > 2 else gt
 
-        my_dice = dice_score(my_pred, gt, threshold_gt=0.5)
+        my_dice = dice_score(my_pred, gt, threshold_seg=0.5)
         my_dice_list.append(my_dice)
 
     print(f"Average Dice Score for '{subtype}' - {round(sum(my_dice_list) / len(my_dice_list), 3)}")

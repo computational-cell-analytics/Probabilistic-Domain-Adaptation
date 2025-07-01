@@ -6,7 +6,7 @@ import torch
 from prob_utils.my_utils import DummyLoss
 from prob_utils.my_models import ProbabilisticUnet
 from prob_utils.my_predictions import punet_prediction
-from prob_utils.my_evaluations import run_em_dice_evaluation
+from prob_utils.my_evaluations import run_dice_evaluation
 from prob_utils.my_trainer import MeanTeacherTrainer, MeanTeacherLogger
 
 from common import get_dual_loaders, my_weak_augmentations
@@ -75,59 +75,71 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
         trainer.fit(n_iterations, overwrite_training=False)
 
 
-def do_mean_teacher_predictions(device, data_path: str, pred_path: str):
+def do_mean_teacher_predictions(args, device, data_path: str, pred_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
-    model = ProbabilisticUnet(
-        input_channels=1,
-        num_classes=1,
-        num_filters=[64, 128, 256, 512],
-        latent_dim=6,
-        no_convs_fcomb=3,
-        beta=1.0,
-        rl_swap=True
-    )
-
-    for em_data in em_types:
+    for em_type in em_types:
 
         if args.consensus is True and args.masking is False:
-            model_save_dir = f"mean-teacher-lung-source-mitoemv2-target-{em_data}-consensus-weighting/best.pt"
-        elif args.masking is True and args.masking is True:
-            model_save_dir = f"mean-teacher-lung-source-mitoemv2-target-{em_data}-consensus-masking/best.pt"
+            name = f"mean-teacher-mito-source-mitoem-target-{em_type}-consensus-weighting"
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-weighting")
+        elif args.consensus is True and args.masking is True:
+            name = f"mean-teacher-mito-source-mitoem-target-{em_type}-consensus-masking"
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-masking")
         else:
-            model_save_dir = f"mean-teacher-lung-source-mitoemv2-target-{em_data}/best.pt"
+            name = f"mean-teacher-mito-source-mitoem-target-{em_type}"
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}")
+
+        model_save_dir = os.path.join(
+            ("./" if args.save_root is None else args.save_root), "checkpoints", name, "best.pt"
+        )
 
         if os.path.exists(model_save_dir) is False:
-            print("The model couldn't be found/hasn't been trained yet")
+            print("The model couldn't be found / hasn't been trained yet")
             continue
 
-        model_state = torch.load(model_save_dir, map_location=torch.device('cpu'))["model_state"]
+        model = ProbabilisticUnet(
+            input_channels=1,
+            num_classes=1,
+            num_filters=[64, 128, 256, 512],
+            latent_dim=6,
+            no_convs_fcomb=3,
+            beta=1.0,
+            rl_swap=True
+        )
+
+        model_state = torch.load(model_save_dir, map_location=torch.device('cpu'), weights_only=False)["model_state"]
         model.load_state_dict(model_state)
         model.to(device)
 
-        output_path = pred_path + f"mean_teacher/source-mitoemv2-target-{em_data}/"
-
-        if em_data == "lucchi":
-            input_path = data_path + "lucchi/Lucchi++/Test_In/*"
-        elif em_data == "vnc":
-            input_path = data_path + "vnc/groundtruth-drosophila-vnc-master/stack1/raw/*"
+        if em_type == "lucchi":
+            input_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_In", "*")
+        elif em_type == "vnc":
+            input_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "raw", "*")
+        elif em_type == "urocell":
+            input_path = os.path.join(data_path, "urocell", "preprocessed", "*_image.tif")
 
         punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device)
 
 
-def do_mean_teacher_evaluations(data_path: str, pred_path: str):
-    em_types = ["vnc", "lucchi"]
-    for em_data in em_types:
-        root_output = os.path.join(pred_path, "punet_predictions")
+def do_mean_teacher_evaluations(args, data_path: str, pred_path: str):
+    em_types = ["vnc", "lucchi", "urocell"]
+    for em_type in em_types:
 
-        if em_data == "lucchi":
-            gt_path = data_path + "lucchi/Lucchi++/Test_Out/"
-            output_path = root_output + "lucchi"
+        if args.consensus is True and args.masking is False:
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-weighting")
+        elif args.consensus is True and args.masking is True:
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-masking")
+        else:
+            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}")
 
-        elif em_data == "vnc":
-            gt_path = data_path + "vnc/groundtruth-drosophila-vnc-master/stack1/mitochondria/"
-            output_path = root_output + "vnc/"
+        if em_type == "lucchi":
+            gt_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_Out", "*")
+        elif em_type == "vnc":
+            gt_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "mitochondria", "*")
+        elif em_type == "urocell":
+            gt_path = os.path.join(data_path, "urocell", "preprocessed", "*_gt.tif")
 
-        run_em_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, model=em_data)
+        run_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, subtype=em_type)
 
 
 def main(args):
@@ -144,7 +156,7 @@ def main(args):
 
     if args.evaluate:
         print("Evaluating the Mean-Teacher predictions of MitoEM dataset")
-        do_mean_teacher_evaluations(data_path=args.data, pred_path=args.pred_path)
+        do_mean_teacher_evaluations(args, data_path=args.data, pred_path=args.pred_path)
 
 
 if __name__ == "__main__":
