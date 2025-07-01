@@ -1,17 +1,21 @@
 import os
 from glob import glob
+
 from sklearn.model_selection import train_test_split
 
 import torch_em
 
 from prob_utils.my_datasets import DualImageCollectionDataset
 
+
 def my_label_transform(x):
     return (x == 255).astype("float32")
 
-def get_nih_loader(data_path, split, batch_size=1, patch_shape=(256, 256), 
-                   val_fraction=0.1, augmentation1=None, augmentation2=None):
-    
+
+def get_nih_loader(
+    data_path, split, batch_size=1, patch_shape=(256, 256),
+    val_fraction=0.1, augmentation1=None, augmentation2=None
+):
     if split == "val":
         raw_paths = glob(os.path.join(data_path, "images", "train", "*.png"))
         label_paths = glob(os.path.join(data_path, "labels", "train", "*.png"))

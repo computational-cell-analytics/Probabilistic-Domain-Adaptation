@@ -11,11 +11,9 @@ from torch_em.data.datasets.util import download_source, unzip
 
 from .my_segmentation_datasets import default_dual_segmentation_loader
 
+
 URL = "http://www.casser.io/files/lucchi_pp.zip"
 CHECKSUM = "770ce9e98fc6f29c1b1a250c637e6c5125f2b5f1260e5a7687b55a79e2e8844d"
-
-# data from: https://sites.google.com/view/connectomics/
-# TODO: add sampler for foreground to avoid empty batches
 
 
 def _load_volume(path, pattern):

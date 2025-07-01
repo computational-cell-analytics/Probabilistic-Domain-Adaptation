@@ -1,17 +1,23 @@
 import os
 import warnings
-import numpy as np
 from glob import glob
 from copy import deepcopy
+
+import numpy as np
+
 from elf.io import open_file
 from elf.wrapper import RoiWrapper
 
 import torch
+
 from torch_em.transform import get_raw_transform
 from torch_em.util import ensure_spatial_array, ensure_tensor_with_channels
-from torch_em.segmentation import ConcatDataset, samples_to_datasets, check_paths, is_segmentation_dataset, _get_default_transform
+from torch_em.segmentation import (
+    ConcatDataset, samples_to_datasets, check_paths, is_segmentation_dataset, _get_default_transform
+)
 
 from prob_utils.my_datasets.my_image_collection_dataset import DualImageCollectionDataset
+
 
 class DualSegmentationDataset(torch.utils.data.Dataset):
     """
@@ -163,12 +169,12 @@ class DualSegmentationDataset(torch.utils.data.Dataset):
             if self.trafo_halo is not None:
                 raw = self.crop(raw)
                 labels = self.crop(labels)
-        
+
         raw1, raw2 = deepcopy(raw), deepcopy(raw)
 
         if self.augmentation1 is not None:
             raw1 = self.augmentation1(raw1)
-        
+
         if self.augmentation2 is not None:
             raw2 = self.augmentation2(raw2)
 
@@ -225,6 +231,7 @@ class DualSegmentationDataset(torch.utils.data.Dataset):
 
         self.__dict__.update(state)
 
+
 def _load_dual_segmentation_dataset(raw_paths, raw_key, label_paths, label_key, **kwargs):
     rois = kwargs.pop("rois", None)
     if isinstance(raw_paths, str):
@@ -252,6 +259,7 @@ def _load_dual_segmentation_dataset(raw_paths, raw_key, label_paths, label_key, 
             ds.append(dset)
         ds = ConcatDataset(*ds)
     return ds
+
 
 def _load_image_collection_dataset(raw_paths, raw_key, label_paths, label_key, roi, **kwargs):
     def _get_paths(rpath, rkey, lpath, lkey, this_roi):
@@ -295,10 +303,13 @@ def _load_image_collection_dataset(raw_paths, raw_key, label_paths, label_key, r
         assert len(roi) == len(raw_paths)
         for i, (raw_path, label_path, this_roi) in enumerate(zip(raw_paths, label_paths, roi)):
             rpath, lpath = _get_paths(raw_path, raw_key, label_path, label_key, this_roi)
-            dset = DualImageCollectionDataset(rpath, lpath, patch_shape=patch_shape, n_samples=samples_per_ds[i], **kwargs)
+            dset = DualImageCollectionDataset(
+                rpath, lpath, patch_shape=patch_shape, n_samples=samples_per_ds[i], **kwargs
+            )
             ds.append(dset)
         ds = ConcatDataset(*ds)
     return ds
+
 
 def default_dual_segmentation_dataset(
     raw_paths,
@@ -327,7 +338,7 @@ def default_dual_segmentation_dataset(
     # we add the train labels to test in order to just pass it to the trainer
     # (we are not using the labels, so for now it is not an issue for us)
     if type(label_paths) is not list:
-        if label_paths.split("/")[-1][:-3]=="vnc_test":
+        if label_paths.split("/")[-1][:-3] == "vnc_test":
             label_paths = label_paths[:-7] + "train.h5"
 
     if is_seg_dataset is None:
@@ -386,6 +397,7 @@ def default_dual_segmentation_dataset(
 
     return ds
 
+
 def default_dual_segmentation_loader(
     raw_paths,
     raw_key,
@@ -433,6 +445,7 @@ def default_dual_segmentation_loader(
         with_label_channels=with_label_channels,
     )
     return get_dual_data_loader(ds, batch_size=batch_size, **loader_kwargs)
+
 
 def get_dual_data_loader(dataset: torch.utils.data.Dataset, batch_size, **loader_kwargs) -> torch.utils.data.DataLoader:
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, **loader_kwargs)
