@@ -191,7 +191,7 @@ def do_fixmatch_predictions(args, device, data_path: str, pred_path: str):
                     model_save_dir = f"fixmatch-livecell-source-{src}-target-{trg}-consensus-masking/best.pt"
                 else:
                     model_save_dir = f"fixmatch-livecell-source-{src}-target-{trg}/best.pt"
-                
+
                 if os.path.exists(model_save_dir) is False:
                     print("The model couldn't be found/hasn't been trained yet")
                     continue
@@ -205,7 +205,13 @@ def do_fixmatch_predictions(args, device, data_path: str, pred_path: str):
                 input_path = data_path + f"images/livecell_test_images/{trg}*"
                 output_path = pred_path + f"fixmatch/source-{src}-target-{trg}/"
 
-                punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device, prior_samples=16)
+                punet_prediction(
+                    input_image_path=input_path,
+                    output_pred_path=output_path,
+                    model=model,
+                    device=device,
+                    prior_samples=16
+                )
 
 
 def do_fixmatch_evaluations(data_path: str, pred_path: str):
@@ -230,7 +236,13 @@ def main(args):
 
     if args.train:
         print("Training PUNet on Fixmatch framework on LiveCELL dataset")
-        do_fixmatch_training(args, data_path=args.data, source_ckpt_path=args.source_checkpoints, pseudo_labels=args.pred_path, device=device)
+        do_fixmatch_training(
+            args,
+            data_path=args.data,
+            source_ckpt_path=args.source_checkpoints,
+            pseudo_labels=args.pred_path,
+            device=device
+        )
 
     if args.predict:
         print("Getting predictions on LiveCELL dataset from the trained Fixmatch framework")
@@ -251,9 +263,17 @@ if __name__ == "__main__":
     parser.add_argument("--consensus", action='store_true', help="Activates Consensus (Weighting) in the network")
     parser.add_argument("--masking", action='store_true', help="Uses Consensus Masking in the training")
 
-    parser.add_argument("--data", type=str, default="~/data/livecell/", help="Path where the dataset already exists/will be downloaded by the dataloader")
-    parser.add_argument("--source_checkpoints", type=str, default="checkpoints/", help="Path where the dataset already exists/will be downloaded by the dataloader")
-    parser.add_argument("--pred_path", type=str, default="~/predictions/livecell/", help="Path where predictions will be saved")
+    parser.add_argument(
+        "--data", type=str, default="~/data/livecell/",
+        help="Path where the dataset already exists/will be downloaded by the dataloader"
+    )
+    parser.add_argument(
+        "--source_checkpoints", type=str, default="checkpoints/",
+        help="Path where the dataset already exists/will be downloaded by the dataloader"
+    )
+    parser.add_argument(
+        "--pred_path", type=str, default="~/predictions/livecell/", help="Path where predictions will be saved"
+    )
 
     args = parser.parse_args()
     main(args)
