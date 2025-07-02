@@ -72,62 +72,70 @@ def do_adamatch_training(args, device, em_types: str, data_path: str):
 
 
 def do_adamatch_predictions(args, device, data_path: str, pred_path: str):
-    cell_list = ['A172', 'BT474', 'BV2', 'Huh7', 'MCF7', 'SHSY5Y', 'SkBr3', 'SKOV3']
+    em_types = ["vnc", "lucchi", "urocell"]
+    for em_type in em_types:
 
-    model = ProbabilisticUnet(
-        input_channels=1,
-        num_classes=1,
-        num_filters=[64, 128, 256, 512],
-        latent_dim=6,
-        no_convs_fcomb=3,
-        beta=1.0,
-        rl_swap=True
-    )
+        if args.consensus is True and args.masking is False:
+            name = f"adamatch-mito-source-mitoem-target-{em_type}-consensus-weighting"
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}-consensus-weighting")
+        elif args.consensus is True and args.masking is True:
+            name = f"adamatch-mito-source-mitoem-target-{em_type}-consensus-masking"
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}-consensus-masking")
+        else:
+            name = f"adamatch-mito-source-mitoem-target-{em_type}"
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}")
 
-    for trg in cell_list:
-        for src in cell_list:
-            if src != trg:
-                if args.consensus is True and args.masking is False:
-                    model_save_dir = f"adamatch-livecell-source-{src}-target-{trg}-consensus-weighting/best.pt"
-                elif args.masking is True and args.masking is True:
-                    model_save_dir = f"adamatch-livecell-source-{src}-target-{trg}-consensus-masking/best.pt"
-                else:
-                    model_save_dir = f"adamatch-livecell-source-{src}-target-{trg}/best.pt"
+        model_save_dir = os.path.join(
+            ("./" if args.save_root is None else args.save_root), "checkpoints", name, "best.pt"
+        )
 
-                if os.path.exists(model_save_dir) is False:
-                    print("The model couldn't be found/hasn't been trained yet")
-                    continue
+        if os.path.exists(model_save_dir) is False:
+            print("The model couldn't be found / hasn't been trained yet")
+            continue
 
-                model_state = torch.load(model_save_dir, map_location=torch.device('cpu'))["model_state"]
-                model.load_state_dict(model_state)
-                model.to(device)
+        model = ProbabilisticUnet(
+            input_channels=1,
+            num_classes=1,
+            num_filters=[64, 128, 256, 512],
+            latent_dim=6,
+            no_convs_fcomb=3,
+            beta=1.0,
+            rl_swap=True
+        )
 
-                input_path = data_path + f"images/livecell_test_images/{trg}*"
-                output_path = pred_path + f"adamatch/source-{src}-target-{trg}/"
+        model_state = torch.load(model_save_dir, map_location=torch.device('cpu'), weights_only=False)["model_state"]
+        model.load_state_dict(model_state)
+        model.to(device)
 
-                punet_prediction(
-                    input_image_path=input_path,
-                    output_pred_path=output_path,
-                    model=model,
-                    device=device,
-                    prior_samples=16
-                )
+        if em_type == "lucchi":
+            input_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_In", "*")
+        elif em_type == "vnc":
+            input_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "raw", "*")
+        elif em_type == "urocell":
+            input_path = os.path.join(data_path, "urocell", "preprocessed", "*_image.tif")
+
+        punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device)
 
 
 def do_adamatch_evaluations(data_path: str, pred_path: str):
-    cell_list = ['A172', 'BT474', 'BV2', 'Huh7', 'MCF7', 'SHSY5Y', 'SkBr3', 'SKOV3']
-    for trg in cell_list:
-        gt_path = data_path + f"annotations/livecell_test_images/{trg}/"
-        for src in cell_list:
-            if src != trg:
-                punet_pred_path = pred_path + f"adamatch/source-{src}-target-{trg}/"
+    em_types = ["vnc", "lucchi", "urocell"]
+    for em_type in em_types:
 
-                if os.path.exists(punet_pred_path) is False:
-                    print("The model predictions haven't been generated, hence no evaluation")
-                    continue
+        if args.consensus is True and args.masking is False:
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}-consensus-weighting")
+        elif args.consensus is True and args.masking is True:
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}-consensus-masking")
+        else:
+            output_path = os.path.join(pred_path, "adamatch", f"source-mitoem-target-{em_type}")
 
-                run_dice_evaluation(gt_path, punet_pred_path)
-                print(f"dice for {trg} from {src}-{trg}")
+        if em_type == "lucchi":
+            gt_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_Out", "*")
+        elif em_type == "vnc":
+            gt_path = os.path.join(data_path, "vnc", "groundtruth-drosophila-vnc-master", "stack1", "mitochondria", "*")
+        elif em_type == "urocell":
+            gt_path = os.path.join(data_path, "urocell", "preprocessed", "*_gt.tif")
+
+        run_dice_evaluation(gt_f_path=gt_path, pred_path=output_path, subtype=em_type)
 
 
 def main(args):
