@@ -79,8 +79,8 @@ class MeanTeacherTrainer(torch_em.trainer.DefaultTrainer):
                 torch.tensor(0.).to(self.device)
             ) for my_sample in samples
         ]
-        samples = torch.stack(samples, dim=0).sum(dim=0)/self.n_samples
-        consensus = torch.stack(consensus, dim=0).sum(dim=0)/self.n_samples
+        samples = torch.stack(samples, dim=0).sum(dim=0) / self.n_samples
+        consensus = torch.stack(consensus, dim=0).sum(dim=0) / self.n_samples
 
         if self.do_consensus_masking:
             consensus = torch.where(consensus == 1, 1, 0)
@@ -172,7 +172,7 @@ class MeanTeacherTrainer(torch_em.trainer.DefaultTrainer):
                     true_metric = dice_score(mypred, true_gt)
                     _true_metric = 1. - true_metric
 
-                dice_metric += mymetric 
+                dice_metric += mymetric
                 loss_val += loss.item()
                 metric_val += _mymetric
                 gt_metric_val += _true_metric

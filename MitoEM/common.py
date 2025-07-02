@@ -57,13 +57,13 @@ def my_weak_augmentations(p=0.25):
     return get_raw_transform(normalizer=norm, augmentation1=aug1)
 
 
-def my_strong_augmentations(p=0.9):
+def my_strong_augmentations(p=0.5):
     norm = my_standardize_torch
     aug1 = transforms.Compose([
         my_standardize_torch,
-        transforms.RandomApply([GaussianBlur(sigma=(1.0, 4.0))], p=p),
-        transforms.RandomApply([AdditiveGaussianNoise(scale=(0.1, 0.35), clip_kwargs=False)], p=p),
-        transforms.RandomApply([RandomContrast(alpha=(0.33, 3), mean=0.0, clip_kwargs=False)], p=p),
+        transforms.RandomApply([GaussianBlur(sigma=(0.6, 3.0))], p=p),
+        transforms.RandomApply([AdditiveGaussianNoise(scale=(0.05, 0.25), clip_kwargs=False)], p=p/2),
+        transforms.RandomApply([RandomContrast(mean=0.0, alpha=(0.33, 3.0), clip_kwargs=False)], p=p),
     ])
     return get_raw_transform(normalizer=norm, augmentation1=aug1)
 

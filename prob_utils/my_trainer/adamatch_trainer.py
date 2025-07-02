@@ -2,12 +2,14 @@ import os
 import time
 
 import torch
+
 import torch_em
 from torch_em.transform.raw import _normalize_torch
 from torch_em.trainer.logger_base import TorchEmLogger
 
 from prob_utils.my_utils import dice_score
 from prob_utils.my_models import l2_regularisation
+
 
 class AdaMatchTrainer(torch_em.trainer.DefaultTrainer):
     """This trainer is meant to be used for AdaMatch-based PUNet's joint-training,
@@ -16,7 +18,7 @@ class AdaMatchTrainer(torch_em.trainer.DefaultTrainer):
     def __init__(self, source_train_loader, target_train_loader, do_consensus_masking=False, **kwargs):
         self.source_train_loader = source_train_loader
         self.target_train_loader = target_train_loader
-        
+
         train_loader = source_train_loader if len(source_train_loader) < len(target_train_loader) else\
             target_train_loader
 
@@ -32,17 +34,18 @@ class AdaMatchTrainer(torch_em.trainer.DefaultTrainer):
         self.model.forward(weak_inputs, None, training=False)
         samples = [self.sigmoid(self.model.sample()) for _ in range(self.n_samples)]
         consensus = [
-            torch.where((my_sample >= upper_thres) + (my_sample <= lower_thres),
-                        torch.tensor(1.).to(self.device),
-                        torch.tensor(0.).to(self.device))
-            for my_sample in samples
+            torch.where(
+                (my_sample >= upper_thres) + (my_sample <= lower_thres),
+                torch.tensor(1.).to(self.device),
+                torch.tensor(0.).to(self.device)
+            ) for my_sample in samples
         ]
         samples = torch.stack(samples, dim=0).sum(dim=0)/self.n_samples
         consensus = torch.stack(consensus, dim=0).sum(dim=0)/self.n_samples
 
         if self.do_consensus_masking:
             consensus = torch.where(consensus == 1, 1, 0)
-        
+
         return samples, consensus
 
     def sample_from_model(self):
@@ -178,9 +181,13 @@ class AdaMatchLogger(TorchEmLogger):
         self.log_image_interval = trainer.log_image_interval
 
     def add_image(self, xt, xt1, xt2, y, z, gt, samples, name, step):
-        self.tb.add_image(tag=f"{name}/target_inputs", img_tensor=_normalize_torch(xt[0]), global_step=step)
-        self.tb.add_image(tag=f"{name}/weak_aug", img_tensor=_normalize_torch(xt1[0]), global_step=step)
-        self.tb.add_image(tag=f"{name}/strong_aug", img_tensor=_normalize_torch(xt2[0]), global_step=step)
+
+        from functools import partial
+        norm = partial(_normalize_torch, minval=None, maxval=None, axis=None, eps=1e-7)
+
+        self.tb.add_image(tag=f"{name}/target_inputs", img_tensor=norm(xt[0]), global_step=step)
+        self.tb.add_image(tag=f"{name}/weak_aug", img_tensor=norm(xt1[0]), global_step=step)
+        self.tb.add_image(tag=f"{name}/strong_aug", img_tensor=norm(xt2[0]), global_step=step)
         self.tb.add_image(tag=f"{name}/weak_model_predictions", img_tensor=y[0], global_step=step)
         self.tb.add_image(tag=f"{name}/weak_model_consensus", img_tensor=z[0], global_step=step)
         self.tb.add_image(tag=f"{name}/target_ground_truth", img_tensor=gt[0], global_step=step)

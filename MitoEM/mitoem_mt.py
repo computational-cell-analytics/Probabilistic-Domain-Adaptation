@@ -24,7 +24,6 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
         )
 
         my_ckpt = os.path.join(source_ckpt_path, "punet-source-mitoem", "best.pt")
-
         if not os.path.exists(my_ckpt):
             print("The checkpoint directory couldn't be found / source network hasn't been trained")
             continue
@@ -67,7 +66,7 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
             logger=MeanTeacherLogger,
             mixed_precision=True,
             compile_model=False,
-            log_image_interval=1000,
+            log_image_interval=100,
             do_consensus_masking=args.masking,
         )
 

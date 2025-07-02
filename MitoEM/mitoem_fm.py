@@ -15,8 +15,7 @@ from common import get_dual_loaders
 def do_fixmatch_training(args, device, data_path: str, source_ckpt_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
     for em_data in em_types:
-        print(f"Training on {em_data} using Mean-Teacher scheme")
-
+        print(f"Training on {em_data} using Fixmatch scheme")
         train_loader, val_loader = get_dual_loaders(em_data=em_data, root_input_dir=data_path)
 
         my_ckpt = os.path.join(source_ckpt_path, "punet-source-mitoem", "best.pt")
@@ -36,18 +35,19 @@ def do_fixmatch_training(args, device, data_path: str, source_ckpt_path: str):
         )
         model.to(device)
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-7)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=5)
 
         if args.consensus is True and args.masking is False:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-weighting"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}-consensus-weighting"
         elif args.consensus is True and args.masking is True:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-masking"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}-consensus-masking"
         else:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}"
 
         trainer = FixMatchTrainer(
             name=my_name,
+            save_root=args.save_root,
             ckpt_model=my_ckpt,
             source_distribution=None,
             train_loader=train_loader,
@@ -60,6 +60,7 @@ def do_fixmatch_training(args, device, data_path: str, source_ckpt_path: str):
             lr_scheduler=scheduler,
             logger=FixMatchLogger,
             mixed_precision=True,
+            compile_model=False,
             log_image_interval=10,
             do_consensus_masking=args.masking
         )
@@ -136,7 +137,7 @@ def main(args):
 
     if args.train:
         print("Training PUNet on Fixmatch framework on MitoEM datasets")
-        do_fixmatch_training(args, data_path=args.data, source_ckpt_path=args.source_checkpoints)
+        do_fixmatch_training(args, data_path=args.data, device=device, source_ckpt_path=args.source_checkpoints)
 
     if args.predict:
         print("Getting predictions on MitoEM datasets from the trained Fixmatch framework")

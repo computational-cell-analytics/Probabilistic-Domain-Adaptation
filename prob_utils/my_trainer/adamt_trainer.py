@@ -3,6 +3,7 @@ import time
 from copy import deepcopy
 
 import torch
+
 import torch_em
 from torch_em.transform.raw import _normalize_torch
 from torch_em.trainer.logger_base import TorchEmLogger
@@ -10,9 +11,11 @@ from torch_em.trainer.logger_base import TorchEmLogger
 from prob_utils.my_utils import dice_score
 from prob_utils.my_models import l2_regularisation
 
+
 class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
-    """This trainer is meant to be used for AdaMatch-MeanTeacher-based PUNet's joint-training, 
-    where we also weight the ELBO based on consensus masks"""
+    """This trainer is meant to be used for AdaMatch-MeanTeacher-based PUNet's joint-training,
+    where we also weight the ELBO based on consensus masks
+    """
 
     def __init__(self, source_train_loader, target_train_loader, momentum=0.999, do_consensus_masking=False, **kwargs):
         self.source_train_loader = source_train_loader
@@ -20,7 +23,7 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
 
         train_loader = source_train_loader if len(source_train_loader) < len(target_train_loader) else\
             target_train_loader
-        
+
         super().__init__(train_loader=train_loader, **kwargs)
         self._kwargs = kwargs
         self.sigmoid = torch.nn.Sigmoid()
@@ -32,25 +35,25 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
         with torch.no_grad():
             self.teacher = deepcopy(self.model)
             for param in self.teacher.parameters():
-                param.requires_grad=False
+                param.requires_grad = False
 
     def _momentum_update(self):
         current_momentum = min(1 - 1 / (self._iteration + 1), self.momentum)
         for param, param_teacher in zip(self.model.parameters(), self.teacher.parameters()):
             param_teacher.data = param_teacher.data * current_momentum + param.data * (1. - current_momentum)
-    
-    def save_checkpoint(self, name, best_metric):
+
+    def save_checkpoint(self, name, current_metric, best_metric, train_time=0.0):
         teacher_state = {"teacher_state": self.teacher.state_dict()}
-        super().save_checkpoint(name, best_metric, **teacher_state)
+        super().save_checkpoint(name, current_metric, best_metric, train_time=train_time, **teacher_state)
 
     def load_checkpoint(self, checkpoint="best"):
         save_dict = super().load_checkpoint(checkpoint)
         self.teacher.load_state_dict(save_dict["teacher_state"])
         self.teacher.to(self.device)
         return save_dict
-    
-    def _initialize(self, iterations, load_from_checkpoint):
-        best_metric = super()._initialize(iterations, load_from_checkpoint)
+
+    def _initialize(self, iterations, load_from_checkpoint, epochs=None):
+        best_metric = super()._initialize(iterations, load_from_checkpoint, epochs=epochs)
         self.teacher.to(self.device)
         return best_metric
 
@@ -58,27 +61,28 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
         self.teacher.forward(weak_inputs, None, training=False)
         samples = [self.sigmoid(self.teacher.sample()) for _ in range(self.n_samples)]
         consensus = [
-            torch.where((my_sample >= upper_thres) + (my_sample <= lower_thres), 
-                        torch.tensor(1.).to(self.device), 
-                        torch.tensor(0.).to(self.device)) 
-            for my_sample in samples
+            torch.where(
+                (my_sample >= upper_thres) + (my_sample <= lower_thres),
+                torch.tensor(1.).to(self.device),
+                torch.tensor(0.).to(self.device)
+            ) for my_sample in samples
         ]
         samples = torch.stack(samples, dim=0).sum(dim=0)/self.n_samples
         consensus = torch.stack(consensus, dim=0).sum(dim=0)/self.n_samples
 
         if self.do_consensus_masking:
-            consensus = torch.where(consensus==1, 1, 0)
-        
+            consensus = torch.where(consensus == 1, 1, 0)
+
         return samples, consensus
-    
+
     def sample_from_model(self):
         samples = [self.sigmoid(self.model.sample()) for _ in range(self.n_samples)]
         samples = torch.stack(samples, dim=0).sum(dim=0)/self.n_samples
         return samples
-    
+
     def _train_epoch_impl(self, progress, forward_context, backprop):
         self.model.train()
-        
+
         n_iter = 0
         t_per_iter = time.time()
 
@@ -91,7 +95,8 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
             with forward_context():
                 self.model.forward(xs, ys, training=True)
                 supervised_elbo = self.model.elbo(ys)
-                supervised_reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                supervised_reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                    + l2_regularisation(self.model.fcomb.layers)
                 supervised_loss = -supervised_elbo + 1e-5 * supervised_reg_loss
 
             teacher_inputs, model_inputs = xt1, xt2
@@ -99,14 +104,15 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
             # target dataset used to generate predictions from the joint-training teacher model
             with torch.no_grad():
                 y, z = self.sample_from_teacher(teacher_inputs)
-                
+
             y, z = y.detach(), z.detach()
 
             # target training based on pseudo labels generated on-the-fly from the teacher above
             with forward_context():
                 self.model.forward(model_inputs, y, training=True)
                 target_elbo = self.model.elbo(y, z)
-                target_reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                target_reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                    + l2_regularisation(self.model.fcomb.layers)
                 target_loss = -target_elbo + 1e-5 * target_reg_loss
 
             loss = (supervised_loss + target_loss) / 2
@@ -120,7 +126,7 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
 
             with torch.no_grad():
                 self._momentum_update()
-            
+
             self._iteration += 1
             n_iter += 1
             if self._iteration >= self.max_iteration:
@@ -129,7 +135,7 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
 
         t_per_iter = (time.time() - t_per_iter) / n_iter
         return t_per_iter
-    
+
     def _validate_impl(self, forward_context):
         self.model.eval()
 
@@ -151,7 +157,8 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
                 with forward_context():
                     self.model.forward(model_inputs, y, training=True)
                     elbo = self.model.elbo(y, z)
-                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                        + l2_regularisation(self.model.fcomb.layers)
                     loss = -elbo + 1e-5 * reg_loss
 
                     samples = self.sample_from_model()
@@ -163,7 +170,7 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
                     true_metric = dice_score(mypred, true_gt)
                     _true_metric = 1. - true_metric
 
-                dice_metric += mymetric 
+                dice_metric += mymetric
                 loss_val += loss.item()
                 metric_val += _mymetric
                 gt_metric_val += _true_metric
@@ -176,8 +183,11 @@ class AdaMTTrainer(torch_em.trainer.DefaultTrainer):
 
         if self.logger is not None:
             samples = self.sample_from_model()
-            self.logger.log_validation(self._iteration, metric_val, loss_val, xt, xt1, xt2, y, z, yt, samples, gt_metric=gt_metric_val)
+            self.logger.log_validation(
+                self._iteration, metric_val, loss_val, xt, xt1, xt2, y, z, yt, samples, gt_metric=gt_metric_val
+            )
         return metric_val
+
 
 class AdaMTLogger(TorchEmLogger):
     def __init__(self, trainer, save_root, **unused_kwargs):
@@ -192,9 +202,13 @@ class AdaMTLogger(TorchEmLogger):
 
     def add_image(self, xt, xt1, xt2, y, z, gt, samples, name, step):
         # NOTE: we only show the first tensor per batch for all images
-        self.tb.add_image(tag=f"{name}/target_inputs", img_tensor=_normalize_torch(xt[0]), global_step=step)
-        self.tb.add_image(tag=f"{name}/weak_aug1", img_tensor=_normalize_torch(xt1[0]), global_step=step)
-        self.tb.add_image(tag=f"{name}/weak_aug1", img_tensor=_normalize_torch(xt2[0]), global_step=step)
+
+        from functools import partial
+        norm = partial(_normalize_torch, minval=None, maxval=None, axis=None, eps=1e-7)
+
+        self.tb.add_image(tag=f"{name}/target_inputs", img_tensor=norm(xt[0]), global_step=step)
+        self.tb.add_image(tag=f"{name}/weak_aug1", img_tensor=norm(xt1[0]), global_step=step)
+        self.tb.add_image(tag=f"{name}/weak_aug1", img_tensor=norm(xt2[0]), global_step=step)
         self.tb.add_image(tag=f"{name}/teacher_predictions", img_tensor=y[0], global_step=step)
         self.tb.add_image(tag=f"{name}/teacher_consensus", img_tensor=z[0], global_step=step)
         self.tb.add_image(tag=f"{name}/target_ground_truth", img_tensor=gt[0], global_step=step)

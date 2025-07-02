@@ -46,7 +46,7 @@ def do_punet_training(device, data_path: str, save_root: str):
     )
 
     n_iterations = 100000
-    trainer.fit(n_iterations)
+    trainer.fit(n_iterations, overwrite_training=False)
 
 
 def do_punet_predictions(device, data_path: str, pred_path: str, em_type: str, save_root: str):
