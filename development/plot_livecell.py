@@ -89,8 +89,8 @@ def main():
             continue
 
         # Load image and labels
-        og_image = imageio.imread(ipath)  # [:512, :512]  # Do some silly cropping
-        gt = imageio.imread(gpath)  # [:512, :512]  # Do some silly cropping
+        og_image = imageio.imread(ipath)
+        gt = imageio.imread(gpath)
         gt = (gt > 0).astype("uint8")  # And binarize the labels.
 
         # Pass the inputs through the model.

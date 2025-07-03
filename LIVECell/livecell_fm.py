@@ -118,7 +118,8 @@ def do_fixmatch_training(
 
                 if use_distro_alignment:
                     print(f"Getting scores for source-{src} at targets-{trg}")
-                    pred_folder = pseudo_labels + f"punet_source_predictions/{src}/annotations/livecell_train_val_images/{trg}"
+                    pred_folder = pseudo_labels + \
+                        f"punet_source_predictions/{src}/annotations/livecell_train_val_images/{trg}"
                     src_dist = compute_class_distribution(pred_folder)
                 else:
                     src_dist = None
