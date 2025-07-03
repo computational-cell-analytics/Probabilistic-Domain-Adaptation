@@ -20,7 +20,7 @@ def get_mitoem_loaders(
         path=data_path,
         splits="train",
         patch_shape=patch_shape,
-        batch_size=16,
+        batch_size=4,
         ndim=2,
         binary=True,
         sampler=my_sampler,
