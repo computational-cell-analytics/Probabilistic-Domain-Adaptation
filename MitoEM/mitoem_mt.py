@@ -40,7 +40,7 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
         )
         model.to(device)
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=5)
 
         if args.consensus is True and args.masking is False:

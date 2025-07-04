@@ -36,7 +36,7 @@ def do_adamatch_training(args, device, em_types: str, data_path: str):
         )
         model.to(device)
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=10)
 
         if args.consensus is True and args.masking is False:
@@ -65,7 +65,7 @@ def do_adamatch_training(args, device, em_types: str, data_path: str):
             do_consensus_masking=args.masking
         )
 
-        n_iterations = 25000
+        n_iterations = 10000
         trainer.fit(n_iterations)
 
         torch.cuda.empty_cache()

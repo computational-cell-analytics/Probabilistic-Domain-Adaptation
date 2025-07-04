@@ -68,7 +68,7 @@ def do_unet_training(data_path, device):
             train_loader=train_loader,
             val_loader=val_loader,
             device=device,
-            learning_rate=1.0e-4,
+            learning_rate=1e-4,
             mixed_precision=True,
             compile_model=False,
             log_image_interval=1000

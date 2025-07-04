@@ -51,7 +51,7 @@ def do_unet_training(data_path: str, device, patch_shape=(256, 256)):
             train_loader=target_train_loader,
             val_loader=target_val_loader,
             device=device,
-            learning_rate=1.0e-4,
+            learning_rate=1e-4,
             log_image_interval=1000
         )
 
