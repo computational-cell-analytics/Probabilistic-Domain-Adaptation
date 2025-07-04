@@ -1,17 +1,20 @@
 # Dataloader wrapped to get the Pseudo Labels and Consensus Responses for Target Training
 
 import os
-import imageio
 import requests
-import numpy as np
 from tqdm import tqdm
 from shutil import copyfileobj
 
+import numpy as np
+import imageio.v3 as imageio
+
+import torch
+
 import torch_em
-import torch.utils.data
 from torch_em.data.datasets.util import download_source, unzip, update_kwargs
 
 from prob_utils.my_datasets import DualImageCollectionDataset
+
 
 URLS = {
     "images": "http://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/images.zip",
@@ -65,11 +68,11 @@ def _create_segmentations_from_annotations(annotation_file, image_folder, seg_fo
         # get the path for the image data and make sure the corresponding image exists
         image_metadata = coco.loadImgs(image_id)[0]
         file_name = image_metadata["file_name"]
-        
+
         # if cell_type names are given we only select file names that match a cell_type
         if cell_types is not None and (not any([cell_type in file_name for cell_type in cell_types])):
             continue
-        
+
         sub_folder = file_name.split("_")[0]
         image_path = os.path.join(image_folder, sub_folder, file_name)
         # something changed in the image layout? we keep the old version around in case this chagnes back...
@@ -100,7 +103,8 @@ def _create_segmentations_from_annotations(annotation_file, image_folder, seg_fo
         imageio.imwrite(seg_path, seg)
 
     assert len(image_paths) == len(seg_paths)
-    assert len(image_paths) > 0, f"No matching image paths were found. Did you pass invalid cell type naems ({cell_types})?"
+    assert len(image_paths) > 0, \
+        f"No matching image paths were found. Did you pass invalid cell type naems ({cell_types})?"
     return image_paths, seg_paths
 
 
@@ -110,9 +114,10 @@ def _download_livecell_annotations(path, split, download, cell_types, label_path
         split_name = "livecell_test_images"
     else:
         split_name = "livecell_train_val_images"
-    
+
     image_folder = os.path.join(path, "images", split_name)
-    seg_folder = os.path.join(path, "annotations", split_name) if label_path is None else os.path.join(label_path, "annotations", split_name)
+    seg_folder = os.path.join(path, "annotations", split_name) \
+        if label_path is None else os.path.join(label_path, "annotations", split_name)
 
     assert os.path.exists(image_folder), image_folder
 
@@ -142,28 +147,32 @@ def _livecell_segmentation_loader(
     if transform is None:
         transform = torch_em.transform.get_augmentations(ndim=2)
 
-    ds = DualImageCollectionDataset(image_paths, label_paths,
-                                              patch_shape=patch_shape,
-                                              raw_transform=raw_transform,
-                                              label_transform=label_transform,
-                                              label_transform2=label_transform2,
-                                              label_dtype=label_dtype,
-                                              augmentation1=augmentation1,
-                                              augmentation2=augmentation2,
-                                              transform=transform,
-                                              n_samples=n_samples)
-    
+    ds = DualImageCollectionDataset(
+        image_paths, label_paths,
+        patch_shape=patch_shape,
+        raw_transform=raw_transform,
+        label_transform=label_transform,
+        label_transform2=label_transform2,
+        label_dtype=label_dtype,
+        augmentation1=augmentation1,
+        augmentation2=augmentation2,
+        transform=transform,
+        n_samples=n_samples
+    )
+
     return torch_em.segmentation.get_data_loader(ds, batch_size, **loader_kwargs)
 
 
-def get_dual_livecell_loader(path, patch_shape, split, download=False,
-                        offsets=None, boundaries=False, binary=False,
-                        cell_types=None, label_path=None, label_dtype=torch.int64, **kwargs):
+def get_dual_livecell_loader(
+    path, patch_shape, split, download=False,
+    offsets=None, boundaries=False, binary=False,
+    cell_types=None, label_path=None, label_dtype=torch.int64, **kwargs
+):
     assert split in ("train", "val", "test")
     if cell_types is not None:
-        assert isinstance(cell_types, (list, tuple)),\
+        assert isinstance(cell_types, (list, tuple)), \
             f"cell_types must be passed as a list or tuple instead of {cell_types}"
-    
+
     _download_livecell_images(path, download)
     image_paths, seg_paths = _download_livecell_annotations(path, split, download, cell_types, label_path)
 

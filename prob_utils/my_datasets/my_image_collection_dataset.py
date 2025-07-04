@@ -1,9 +1,12 @@
-import numpy as np
 from copy import deepcopy
 
+import numpy as np
+
 import torch
-from torch_em.util import (ensure_spatial_array, ensure_tensor_with_channels,
-                    load_image, supports_memmap, ensure_tensor)
+
+from torch_em.util import (
+    ensure_spatial_array, ensure_tensor_with_channels, load_image, supports_memmap
+)
 
 
 # TODO pad images that are too small for the patch shape
@@ -179,6 +182,7 @@ class ImageCollectionDataset(torch.utils.data.Dataset):
         consensus = ensure_tensor_with_channels(consensus, ndim=self._ndim, dtype=torch.int32)
         return raw, labels, consensus
 
+
 # TODO pad images that are too small for the patch shape
 class DualImageCollectionDataset(torch.utils.data.Dataset):
     max_sampling_attempts = 500
@@ -341,13 +345,14 @@ class DualImageCollectionDataset(torch.utils.data.Dataset):
             # if self.trafo_halo is not None:
             #     raw = self.crop(raw)
             #     labels = self.crop(labels)
-        
+
         raw1, raw2 = deepcopy(raw), deepcopy(raw)
-        raw1, raw2 = ensure_tensor_with_channels(raw1, ndim=self._ndim, dtype=self.dtype), ensure_tensor_with_channels(raw2, ndim=self._ndim, dtype=self.dtype)
+        raw1, raw2 = ensure_tensor_with_channels(raw1, ndim=self._ndim, dtype=self.dtype), \
+            ensure_tensor_with_channels(raw2, ndim=self._ndim, dtype=self.dtype)
 
         if self.augmentation1 is not None:
             raw1 = self.augmentation1(raw1)
-        
+
         if self.augmentation2 is not None:
             raw2 = self.augmentation2(raw2)
 

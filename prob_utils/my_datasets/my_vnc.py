@@ -1,9 +1,10 @@
 import os
-import h5py
-import imageio
-import numpy as np
 from glob import glob
 from shutil import rmtree
+
+import h5py
+import numpy as np
+import imageio.v3 as imageio
 from skimage.measure import label
 
 import torch_em
@@ -63,22 +64,24 @@ def get_vnc_mito_loader(
 ):
     _get_vnc_data(path, download)
     assert partition in ("tr", "ts")
-    # we do this to reverse the train-test because we only have "stack1" 's true labels, 
-    # hence can develop self learning on the test split, i.e. "stack2" 
-    if partition=="tr":
-        split="test"
-    elif partition=="ts":
-        split="train"
+
+    # we do this to reverse the train-test because we only have "stack1" 's true labels,
+    # hence can develop self learning on the test split, i.e. "stack2"
+    if partition == "tr":
+        split = "test"
+    elif partition == "ts":
+        split = "train"
+    else:
+        raise ValueError
 
     data_path = os.path.join(path, f"vnc_{split}.h5")
 
     assert sum((offsets is not None, boundaries, binary)) <= 1, f"{offsets}, {boundaries}, {binary}"
     if offsets is not None:
         # we add a binary target channel for foreground background segmentation
-        label_transform = torch_em.transform.label.AffinityTransform(offsets=offsets,
-                                                                     ignore_label=None,
-                                                                     add_binary_target=True,
-                                                                     add_mask=True)
+        label_transform = torch_em.transform.label.AffinityTransform(
+            offsets=offsets, ignore_label=None, add_binary_target=True, add_mask=True,
+        )
         msg = "Offsets are passed, but 'label_transform2' is in the kwargs. It will be over-ridden."
         kwargs = update_kwargs(kwargs, 'label_transform2', label_transform, msg=msg)
     elif boundaries:
@@ -95,9 +98,3 @@ def get_vnc_mito_loader(
     return default_dual_segmentation_loader(
         data_path, raw_key, data_path, label_key, patch_shape=patch_shape, **kwargs
     )
-
-
-# TODO implement
-# TODO extra kwargs for binary / boundaries / affinities
-def get_vnc_neuron_loader(path, patch_shape, download=False, **kwargs):
-    raise NotImplementedError

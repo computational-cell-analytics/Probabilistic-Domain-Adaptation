@@ -1,16 +1,20 @@
 import os
 from glob import glob
+
 from sklearn.model_selection import train_test_split
 
 import torch_em
 
 from prob_utils.my_datasets import DualImageCollectionDataset
 
+
 def my_label_transform(x):
     return (x == 255).astype("float32")
 
-def get_jsrt_s2_loader(data_path, split, batch_size=1, patch_shape=(256, 256), 
-                       val_fraction=0.1, augmentation1=None, augmentation2=None):
+
+def get_jsrt_s2_loader(
+    data_path, split, batch_size=1, patch_shape=(256, 256), val_fraction=0.1, augmentation1=None, augmentation2=None
+):
 
     if split == "val":
         raw_paths = glob(os.path.join(data_path, "org_train", "*.bmp"))
@@ -36,7 +40,5 @@ def get_jsrt_s2_loader(data_path, split, batch_size=1, patch_shape=(256, 256),
         label_transform=my_label_transform,
         augmentation1=augmentation1, augmentation2=augmentation2
     )
-    loader = torch_em.segmentation.get_data_loader(
-        dataset, batch_size=batch_size, num_workers=8, shuffle=True,
-    )
+    loader = torch_em.segmentation.get_data_loader(dataset, batch_size=batch_size, num_workers=8, shuffle=True)
     return loader

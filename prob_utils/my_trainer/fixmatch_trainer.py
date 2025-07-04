@@ -2,8 +2,9 @@ import os
 import time
 
 import torch
-import torch_em
 from torchvision.utils import make_grid
+
+import torch_em
 from torch_em.transform.raw import _normalize_torch
 from torch_em.trainer.logger_base import TorchEmLogger
 
@@ -15,33 +16,41 @@ class FixMatchTrainer(torch_em.trainer.DefaultTrainer):
     """This trainer is meant to be used for FixMatch-based PUNet's training,
     where we also weight the ELBO based on consensus masks"""
 
-    def __init__(self, ckpt_model=None, source_distribution=None, **kwargs):
+    def __init__(self, ckpt_model=None, source_distribution=None, do_consensus_masking=False, **kwargs):
         super().__init__(**kwargs)
+
         self._kwargs = kwargs
         self.sigmoid = torch.nn.Sigmoid()
         self.n_samples = 16
         self.ckpt_model = ckpt_model
+        self.do_consensus_masking = do_consensus_masking
+
         if source_distribution is None:
             self.source_distribution = None
         else:
             self.source_distribution = torch.FloatTensor(source_distribution).to(self.device)
 
         if self.ckpt_model is not None:
-            weights = torch.load(self.ckpt_model, map_location=self.device)["model_state"]
+            weights = torch.load(self.ckpt_model, map_location=self.device, weights_only=False)["model_state"]
             self.model.load_state_dict(weights)
 
     def sample_from_weak_model(self, weak_inputs, upper_thres=0.9, lower_thres=0.1):
         self.model.forward(weak_inputs, None, training=False)
         samples = [self.sigmoid(self.model.sample()) for _ in range(self.n_samples)]
         consensus = [
-            torch.where((my_sample >= upper_thres) + (my_sample <= lower_thres),
-                        torch.tensor(1.).to(self.device),
-                        torch.tensor(0.).to(self.device))
+            torch.where(
+                (my_sample >= upper_thres) + (my_sample <= lower_thres),
+                torch.tensor(1.).to(self.device),
+                torch.tensor(0.).to(self.device)
+            )
             for my_sample in samples
         ]
-        samples = torch.stack(samples, dim=0).sum(dim=0)/self.n_samples
-        consensus = torch.stack(consensus, dim=0).sum(dim=0)/self.n_samples
-        consensus = torch.where(consensus==1, 1, 0)
+        samples = torch.stack(samples, dim=0).sum(dim=0) / self.n_samples
+        consensus = torch.stack(consensus, dim=0).sum(dim=0) / self.n_samples
+
+        if self.do_consensus_masking:
+            consensus = torch.where(consensus == 1, 1, 0)
+
         return samples, consensus
 
     def sample_from_model(self):
@@ -62,6 +71,7 @@ class FixMatchTrainer(torch_em.trainer.DefaultTrainer):
 
             with torch.no_grad():
                 y, z = self.sample_from_weak_model(weak_aug)
+
             y, z = y.detach(), z.detach()
 
             if self.source_distribution is None:
@@ -164,8 +174,11 @@ class FixMatchLogger(TorchEmLogger):
     def add_image(self, x, x1, x2, y, z, gt, samples, name, step):
         # NOTE: we only show the first tensor per batch for all images
 
-        weak_aug = _normalize_torch(x1[0])
-        strong_aug = _normalize_torch(x2[0])
+        from functools import partial
+        norm = partial(_normalize_torch, minval=None, maxval=None, axis=None, eps=1e-7)
+
+        weak_aug = norm(x1[0])
+        strong_aug = norm(x2[0])
         pseudo_labels = y[0]
         prediction = samples[0]
 

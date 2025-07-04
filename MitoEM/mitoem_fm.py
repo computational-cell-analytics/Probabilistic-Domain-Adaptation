@@ -7,21 +7,16 @@ from prob_utils.my_utils import DummyLoss
 from prob_utils.my_models import ProbabilisticUnet
 from prob_utils.my_predictions import punet_prediction
 from prob_utils.my_evaluations import run_dice_evaluation
-from prob_utils.my_trainer import MeanTeacherTrainer, MeanTeacherLogger
+from prob_utils.my_trainer import FixMatchTrainer, FixMatchLogger
 
-from common import get_dual_loaders, my_weak_augmentations
+from common import get_dual_loaders
 
 
-def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str):
+def do_fixmatch_training(args, device, data_path: str, source_ckpt_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
     for em_data in em_types:
-        print(f"Training on {em_data} using Mean-Teacher scheme")
-        train_loader, val_loader = get_dual_loaders(
-            em_data=em_data,
-            root_input_dir=data_path,
-            weak_augs=my_weak_augmentations(),
-            strong_augs=my_weak_augmentations(),
-        )
+        print(f"Training on {em_data} using Fixmatch scheme")
+        train_loader, val_loader = get_dual_loaders(em_data=em_data, root_input_dir=data_path)
 
         my_ckpt = os.path.join(source_ckpt_path, "punet-source-mitoem", "best.pt")
         if not os.path.exists(my_ckpt):
@@ -40,21 +35,21 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
         )
         model.to(device)
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-7)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=5)
 
         if args.consensus is True and args.masking is False:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-weighting"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}-consensus-weighting"
         elif args.consensus is True and args.masking is True:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}-consensus-masking"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}-consensus-masking"
         else:
-            my_name = f"mean-teacher-mito-source-mitoem-target-{em_data}"
+            my_name = f"fixmatch-mito-source-mitoem-target-{em_data}"
 
-        trainer = MeanTeacherTrainer(
+        trainer = FixMatchTrainer(
             name=my_name,
             save_root=args.save_root,
-            ckpt_teacher=my_ckpt,
             ckpt_model=my_ckpt,
+            source_distribution=None,
             train_loader=train_loader,
             val_loader=val_loader,
             model=model,
@@ -63,30 +58,30 @@ def do_mean_teacher_training(args, device, data_path: str, source_ckpt_path: str
             metric=DummyLoss(),
             device=device,
             lr_scheduler=scheduler,
-            logger=MeanTeacherLogger,
+            logger=FixMatchLogger,
             mixed_precision=True,
             compile_model=False,
             log_image_interval=100,
-            do_consensus_masking=args.masking,
+            do_consensus_masking=args.masking
         )
 
-        n_iterations = 10000
+        n_iterations = 5000
         trainer.fit(n_iterations, overwrite_training=False)
 
 
-def do_mean_teacher_predictions(args, device, data_path: str, pred_path: str):
+def do_fixmatch_predictions(args, device, data_path: str, pred_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
     for em_type in em_types:
 
         if args.consensus is True and args.masking is False:
-            name = f"mean-teacher-mito-source-mitoem-target-{em_type}-consensus-weighting"
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-weighting")
+            name = f"fixmatch-mito-source-mitoem-target-{em_type}-consensus-weighting"
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}-consensus-weighting")
         elif args.consensus is True and args.masking is True:
-            name = f"mean-teacher-mito-source-mitoem-target-{em_type}-consensus-masking"
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-masking")
+            name = f"fixmatch-mito-source-mitoem-target-{em_type}-consensus-masking"
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}-consensus-masking")
         else:
-            name = f"mean-teacher-mito-source-mitoem-target-{em_type}"
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}")
+            name = f"fixmatch-mito-source-mitoem-target-{em_type}"
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}")
 
         model_save_dir = os.path.join(
             ("./" if args.save_root is None else args.save_root), "checkpoints", name, "best.pt"
@@ -120,16 +115,16 @@ def do_mean_teacher_predictions(args, device, data_path: str, pred_path: str):
         punet_prediction(input_image_path=input_path, output_pred_path=output_path, model=model, device=device)
 
 
-def do_mean_teacher_evaluations(args, data_path: str, pred_path: str):
+def do_fixmatch_evaluations(data_path: str, pred_path: str):
     em_types = ["vnc", "lucchi", "urocell"]
     for em_type in em_types:
 
         if args.consensus is True and args.masking is False:
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-weighting")
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}-consensus-weighting")
         elif args.consensus is True and args.masking is True:
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}-consensus-masking")
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}-consensus-masking")
         else:
-            output_path = os.path.join(pred_path, "mean_teacher", f"source-mitoem-target-{em_type}")
+            output_path = os.path.join(pred_path, "fixmatch", f"source-mitoem-target-{em_type}")
 
         if em_type == "lucchi":
             gt_path = os.path.join(data_path, "lucchi", "Lucchi++", "Test_Out", "*")
@@ -146,24 +141,24 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.train:
-        print("Training PUNet on Mean-Teacher framework on MitoEM datasets")
-        do_mean_teacher_training(args, data_path=args.data, source_ckpt_path=args.source_checkpoints, device=device)
+        print("Training PUNet on Fixmatch framework on MitoEM datasets")
+        do_fixmatch_training(args, data_path=args.data, device=device, source_ckpt_path=args.source_checkpoints)
 
     if args.predict:
-        print("Getting predictions on MitoEM datasets from the trained Mean-Teacher framework")
-        do_mean_teacher_predictions(args, data_path=args.data, pred_path=args.pred_path, device=device)
+        print("Getting predictions on MitoEM datasets from the trained Fixmatch framework")
+        do_fixmatch_predictions(args, data_path=args.data, pred_path=args.pred_path, device=device)
 
     if args.evaluate:
-        print("Evaluating the Mean-Teacher predictions of MitoEM dataset")
-        do_mean_teacher_evaluations(args, data_path=args.data, pred_path=args.pred_path)
+        print("Evaluating the Fixmatch predictions of MitoEM dataset")
+        do_fixmatch_evaluations(data_path=args.data, pred_path=args.pred_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--train", action='store_true', help="Enables Mean-Teacher training on MitoEM datasets")
-    parser.add_argument("--predict", action='store_true', help="Obtains Mean-Teacher predictions on MitoEM test-set")
-    parser.add_argument("--evaluate", action='store_true', help="Evaluates Mean-Teacher predictions")
+    parser.add_argument("--train", action='store_true', help="Enables Fixmatch training on MitoEM datasets")
+    parser.add_argument("--predict", action='store_true', help="Obtains Fixmatch predictions on MitoEM test-sets")
+    parser.add_argument("--evaluate", action='store_true', help="Evaluates Fixmatch predictions")
 
     parser.add_argument("--consensus", action='store_true', help="Activates Consensus (Weighting) in the network")
     parser.add_argument("--masking", action='store_true', help="Uses Consensus Masking in the training")
