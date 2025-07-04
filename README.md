@@ -1,6 +1,6 @@
 # Probabilistic Domain Adapation for Biomedical Image Segmentation
 
-Doomain adaptation based on self-training and probabilistic segmentation. This repository implements the methods described in [Probabilistic Domain Adaptation for Probabilistic Domain Adaptation (arXiv)](https://arxiv.org/abs/2303.11790).
+Domain adaptation based on self-training and probabilistic segmentation. This repository implements the methods described in [Probabilistic Domain Adaptation for Probabilistic Domain Adaptation (arXiv)](https://arxiv.org/abs/2303.11790).
 
 ## Installation
 
@@ -24,7 +24,7 @@ Now you can run all scripts for model training, prediction and evaluation in the
 
 We provide the code for all three domain adaptation experiments from the paper, all scripts for the respective experiments are in the respective folders:
 
-### LiveCELL
+### LIVECell
 
 Available training frameworks :
 - UNet Source
