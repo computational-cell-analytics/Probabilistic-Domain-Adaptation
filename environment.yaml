@@ -3,13 +3,8 @@ channels:
 name:
     domain_adaptation
 dependencies:
-    - affogato
-    - bioimageio.core >=0.5.0
     - python-elf
     - pytorch
     - tensorboard
-    - tifffile
     - torchvision
-    - tqdm
-    - kornia
     - torch_em
