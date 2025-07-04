@@ -1,4 +1,7 @@
-from .unet_blocks import *
+import torch.nn as nn
+
+from .unet_blocks import DownConvBlock, UpConvBlock
+
 
 class Unet(nn.Module):
     """
@@ -21,8 +24,8 @@ class Unet(nn.Module):
         self.contracting_path = nn.ModuleList()
 
         for i in range(len(self.num_filters)):
-            input = self.input_channels if i == 0 else output
             output = self.num_filters[i]
+            input = self.input_channels if i == 0 else output
 
             if i == 0:
                 pool = False
@@ -41,9 +44,8 @@ class Unet(nn.Module):
 
         if self.apply_last_layer:
             self.last_layer = nn.Conv2d(output, num_classes, kernel_size=1)
-            #nn.init.kaiming_normal_(self.last_layer.weight, mode='fan_in',nonlinearity='relu')
-            #nn.init.normal_(self.last_layer.bias)
-
+            # nn.init.kaiming_normal_(self.last_layer.weight, mode='fan_in',nonlinearity='relu')
+            # nn.init.normal_(self.last_layer.bias)
 
     def forward(self, x, val):
         blocks = []
@@ -57,11 +59,11 @@ class Unet(nn.Module):
 
         del blocks
 
-        #Used for saving the activations and plotting
+        # Used for saving the activations and plotting
         if val:
             self.activation_maps.append(x)
-        
+
         if self.apply_last_layer:
-            x =  self.last_layer(x)
+            x = self.last_layer(x)
 
         return x

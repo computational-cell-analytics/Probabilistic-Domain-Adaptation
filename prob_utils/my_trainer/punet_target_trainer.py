@@ -11,14 +11,14 @@ from prob_utils.my_models import l2_regularisation
 
 class PseudoTrainer(torch_em.trainer.DefaultTrainer):
     "This trainer is meant to be used for UNet training with Thresholding Response"
-    
+
     def _train_epoch_impl(self, progress, forward_context, backprop):
         self.model.train()
 
         n_iter = 0
         t_per_iter = time.time()
 
-        for x, y, z  in self.train_loader:
+        for x, y, z in self.train_loader:
             x, y, z = x.to(self.device), y.to(self.device), z.to(self.device)
 
             self.optimizer.zero_grad()
@@ -41,7 +41,7 @@ class PseudoTrainer(torch_em.trainer.DefaultTrainer):
 
         t_per_iter = (time.time() - t_per_iter) / n_iter
         return t_per_iter
-    
+
     def _validate_impl(self, forward_context):
         self.model.eval()
 
@@ -66,6 +66,7 @@ class PseudoTrainer(torch_em.trainer.DefaultTrainer):
             self.logger.log_validation(self._iteration, metric_val, loss_val, x, y, pred)
         return metric_val
 
+
 class PseudoLogger(TorchEmLogger):
     def __init__(self, trainer, save_root, **unused_kwargs):
         super().__init__(trainer, save_root)
@@ -86,21 +87,22 @@ class PseudoLogger(TorchEmLogger):
         self.tb.add_scalar(tag="validation/loss", scalar_value=loss, global_step=step)
         self.tb.add_scalar(tag="validation/metric", scalar_value=metric, global_step=step)
         self.add_image(x, y, samples, "validation", step)
-                
+
+
 class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
     "This target trainer is meant to be used for PUNet training, where we weight the ELBO based on consensus masks"
 
     def _sample(self, n_samples=16):
         samples = [self.model.sample() for _ in range(n_samples)]
         return samples
-    
+
     def _train_epoch_impl(self, progress, forward_context, backprop):
         self.model.train()
 
         n_iter = 0
         t_per_iter = time.time()
 
-        for x, y, z  in self.train_loader:
+        for x, y, z in self.train_loader:
             x, y, z = x.to(self.device), y.to(self.device), z.to(self.device)
 
             self.optimizer.zero_grad()
@@ -109,7 +111,8 @@ class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
 
                 self.model.forward(x, y, training=True)
                 elbo = self.model.elbo(y, z)
-                reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                    + l2_regularisation(self.model.fcomb.layers)
                 loss = -elbo + 1e-5 * reg_loss
 
             backprop(loss)
@@ -128,7 +131,7 @@ class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
 
         t_per_iter = (time.time() - t_per_iter) / n_iter
         return t_per_iter
-    
+
     def _validate_impl(self, forward_context):
         self.model.eval()
 
@@ -144,9 +147,10 @@ class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
 
                     self.model.forward(x, y, training=True)
                     elbo = self.model.elbo(y, z)
-                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                        + l2_regularisation(self.model.fcomb.layers)
                     loss = -elbo + 1e-5 * reg_loss
-                    
+
                     # Building the dice metric along the validation instance
                     n_samples = 8
                     samples_per_patch = []
@@ -155,7 +159,7 @@ class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
                         myval = self.model.sample(testing=False)
                         myval = mysig(myval)
                         samples_per_patch.append(myval)
-                        
+
                     mypred = torch.stack(samples_per_patch, dim=0).sum(dim=0)/len(samples_per_patch)
                     mypred = mypred.detach().cpu().numpy().squeeze()
                     mygt = y.detach().cpu().numpy().squeeze()
@@ -163,7 +167,7 @@ class PseudoTrainerPUNet(torch_em.trainer.DefaultTrainer):
                     _mymetric = 1. - mymetric
 
                 # we use dice as the metric and loss from above
-                dice_metric += mymetric 
+                dice_metric += mymetric
                 loss_val += loss.item()
                 metric_val += _mymetric
 
