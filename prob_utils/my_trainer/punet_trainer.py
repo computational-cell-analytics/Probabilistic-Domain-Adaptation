@@ -9,6 +9,7 @@ from torch_em.trainer.logger_base import TorchEmLogger
 from prob_utils.my_utils import dice_score
 from prob_utils.my_models import l2_regularisation
 
+
 class PUNetTrainer(torch_em.trainer.DefaultTrainer):
 
     def _sample(self, n_samples=16):
@@ -28,7 +29,8 @@ class PUNetTrainer(torch_em.trainer.DefaultTrainer):
             with forward_context():
                 self.model.forward(x, y, training=True)
                 elbo = self.model.elbo(y)
-                reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                    + l2_regularisation(self.model.fcomb.layers)
                 loss = -elbo + 1e-5 * reg_loss
 
             backprop(loss)
@@ -61,7 +63,8 @@ class PUNetTrainer(torch_em.trainer.DefaultTrainer):
                 with forward_context():
                     self.model.forward(x, y, training=True)
                     elbo = self.model.elbo(y)
-                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
+                    reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) \
+                        + l2_regularisation(self.model.fcomb.layers)
                     loss = -elbo + 1e-5 * reg_loss
 
                     n_samples = 8
@@ -92,6 +95,7 @@ class PUNetTrainer(torch_em.trainer.DefaultTrainer):
             samples = self._sample()
             self.logger.log_validation(self._iteration, metric_val, loss_val, x, y, samples)
         return metric_val
+
 
 class PUNetLogger(TorchEmLogger):
     def __init__(self, trainer, save_root, **unused_kwargs):

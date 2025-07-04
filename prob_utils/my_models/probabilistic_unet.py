@@ -2,22 +2,35 @@
 
 import numpy as np
 
+import torch
+import torch.nn as nn
+
 from torch_em.loss.dice import DiceLossWithLogits
 from torch.distributions import Normal, Independent, kl
 
-from .unet_blocks import *
 from .unet import Unet
 from .utils import init_weights, init_weights_orthogonal_normal
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Encoder(nn.Module):
     """
-    A convolutional neural network, consisting of len(num_filters) times a block of no_convs_per_block convolutional layers,
-    after each block a pooling operation is performed. And after each convolutional layer a non-linear (ReLU) activation function is applied.
+    A convolutional neural network, consisting of len(num_filters) times a block of no_convs_per_block
+    convolutional layers, after each block a pooling operation is performed.
+    And after each convolutional layer a non-linear (ReLU) activation function is applied.
     """
-    def __init__(self, input_channels, num_filters, no_convs_per_block, initializers, padding=True, posterior=False, num_classes=None):
+    def __init__(
+        self,
+        input_channels,
+        num_filters,
+        no_convs_per_block,
+        initializers,
+        padding=True,
+        posterior=False,
+        num_classes=None
+    ):
         super(Encoder, self).__init__()
         self.contracting_path = nn.ModuleList()
         self.input_channels = input_channels
@@ -34,8 +47,8 @@ class Encoder(nn.Module):
             Determine input_dim and output_dim of conv layers in this block. The first layer is input x output,
             All the subsequent layers are output x output.
             """
-            input_dim = self.input_channels if i == 0 else output_dim
             output_dim = num_filters[i]
+            input_dim = self.input_channels if i == 0 else output_dim
 
             if i != 0:
                 layers.append(nn.AvgPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=True))
@@ -79,24 +92,26 @@ class AxisAlignedConvGaussian(nn.Module):
             self.input_channels, self.num_filters, self.no_convs_per_block, initializers,
             posterior=self.posterior, num_classes=num_classes
         )
-        self.conv_layer = nn.Conv2d(num_filters[-1], 2 * self.latent_dim, (1,1), stride=1)
+        self.conv_layer = nn.Conv2d(num_filters[-1], 2 * self.latent_dim, (1, 1), stride=1)
         self.show_img = 0
         self.show_seg = 0
         self.show_concat = 0
         self.show_enc = 0
         self.sum_input = 0
 
-        # nn.init.kaiming_normal_(self.conv_layer.weight, mode='fan_in', nonlinearity='relu') # nn.init.normal_(self.conv_layer.weight, std=0.001) - TRY WITH THIS, HELPS A/C TO ISSUES
+        # nn.init.kaiming_normal_(self.conv_layer.weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.normal_(self.conv_layer.weight, std=0.001) - TRY WITH THIS, HELPS A/C TO ISSUES
+
         # nn.init.normal_(self.conv_layer.bias)
-        # All weights of all models are initialized with orthogonal initialization having the gain (multiplicative factor) set to 1,
+
+        # All weights of all models are initialized with orthogonal initialization having the
+        # gain (multiplicative factor) set to 1,
         # and the bias terms are initialized by sampling from a truncated normal with σ = 0.001 - from the paper
         nn.init.orthogonal_(self.conv_layer.weight, gain=1)
         nn.init.trunc_normal_(self.conv_layer.bias, std=0.001)
 
-
     def forward(self, input, segm=None):
-
-        #If segmentation is not none, concatenate the mask to the channel axis of the input
+        # If segmentation is not none, concatenate the mask to the channel axis of the input
         if segm is not None:
             self.show_img = input
             self.show_seg = segm
@@ -107,36 +122,39 @@ class AxisAlignedConvGaussian(nn.Module):
         encoding = self.encoder(input)
         self.show_enc = encoding
 
-        #We only want the mean of the resulting hxw image
+        # We only want the mean of the resulting hxw image
         encoding = torch.mean(encoding, dim=2, keepdim=True)
         encoding = torch.mean(encoding, dim=3, keepdim=True)
 
-        #Convert encoding to 2 x latent dim and split up for mu and log_sigma
+        # Convert encoding to 2 x latent dim and split up for mu and log_sigma
         mu_log_sigma = self.conv_layer(encoding)
 
-        #We squeeze the second dimension twice, since otherwise it won't work when batch size is equal to 1
+        # We squeeze the second dimension twice, since otherwise it won't work when batch size is equal to 1
         mu_log_sigma = torch.squeeze(mu_log_sigma, dim=2)
         mu_log_sigma = torch.squeeze(mu_log_sigma, dim=2)
 
-        mu = mu_log_sigma[:,:self.latent_dim]
-        log_sigma = mu_log_sigma[:,self.latent_dim:]
+        mu = mu_log_sigma[:, :self.latent_dim]
+        log_sigma = mu_log_sigma[:, self.latent_dim:]
 
-        #This is a multivariate normal with diagonal covariance matrix sigma
-        #https://github.com/pytorch/pytorch/pull/11178
-        dist = Independent(Normal(loc=mu, scale=torch.exp(log_sigma)),1)
+        # This is a multivariate normal with diagonal covariance matrix sigma
+        # https://github.com/pytorch/pytorch/pull/11178
+        dist = Independent(Normal(loc=mu, scale=torch.exp(log_sigma)), 1)
         return dist
+
 
 class Fcomb(nn.Module):
     """
     A function composed of no_convs_fcomb times a 1x1 convolution that combines the sample taken from the latent space,
     and output of the UNet (the feature map) by concatenating them along their channel axis.
     """
-    def __init__(self, num_filters, latent_dim, num_output_channels, num_classes, no_convs_fcomb, initializers, use_tile=True):
+    def __init__(
+        self, num_filters, latent_dim, num_output_channels, num_classes, no_convs_fcomb, initializers, use_tile=True
+    ):
         super(Fcomb, self).__init__()
-        self.num_channels = num_output_channels #output channels
+        self.num_channels = num_output_channels  # output channels
         self.num_classes = num_classes
         self.channel_axis = 1
-        self.spatial_axes = [2,3]
+        self.spatial_axes = [2, 3]
         self.num_filters = num_filters
         self.latent_dim = latent_dim
         self.use_tile = use_tile
@@ -146,7 +164,7 @@ class Fcomb(nn.Module):
         if self.use_tile:
             layers = []
 
-            #Decoder of N x a 1x1 convolution followed by a ReLU activation function except for the last layer
+            # Decoder of N x a 1x1 convolution followed by a ReLU activation function except for the last layer
             layers.append(nn.Conv2d(self.num_filters[0]+self.latent_dim, self.num_filters[0], kernel_size=1))
             layers.append(nn.ReLU(inplace=True))
 
@@ -174,7 +192,9 @@ class Fcomb(nn.Module):
         repeat_idx = [1] * a.dim()
         repeat_idx[dim] = n_tile
         a = a.repeat(*(repeat_idx))
-        order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(device)
+        order_index = torch.LongTensor(
+            np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])
+        ).to(device)
         return torch.index_select(a, dim, order_index)
 
     def forward(self, feature_map, z):
@@ -183,12 +203,12 @@ class Fcomb(nn.Module):
         So broadcast Z to batch_sizexlatent_dimxHxW. Behavior is exactly the same as tf.tile (verified)
         """
         if self.use_tile:
-            z = torch.unsqueeze(z,2)
+            z = torch.unsqueeze(z, 2)
             z = self.tile(z, 2, feature_map.shape[self.spatial_axes[0]])
-            z = torch.unsqueeze(z,3)
+            z = torch.unsqueeze(z, 3)
             z = self.tile(z, 3, feature_map.shape[self.spatial_axes[1]])
 
-            #Concatenate the feature map (output of the UNet) and the sample taken from the latent space
+            # Concatenate the feature map (output of the UNet) and the sample taken from the latent space
             feature_map = torch.cat((feature_map, z), dim=self.channel_axis)
             output = self.layers(feature_map)
             return self.last_layer(output)
@@ -204,7 +224,17 @@ class ProbabilisticUnet(nn.Module):
     no_cons_per_block: no convs per block in the (convolutional) encoder of prior and posterior
     """
 
-    def __init__(self, input_channels=1, num_classes=1, num_filters=[32,64,128,192], latent_dim=6, no_convs_fcomb=4, beta=10.0, consensus_masking=False, rl_swap=False):
+    def __init__(
+        self,
+        input_channels=1,
+        num_classes=1,
+        num_filters=[32, 64, 128, 192],
+        latent_dim=6,
+        no_convs_fcomb=4,
+        beta=10.0,
+        consensus_masking=False,
+        rl_swap=False
+    ):
         super(ProbabilisticUnet, self).__init__()
         self.input_channels = input_channels
         self.num_classes = num_classes
@@ -212,45 +242,71 @@ class ProbabilisticUnet(nn.Module):
         self.latent_dim = latent_dim
         self.no_convs_per_block = 3
         self.no_convs_fcomb = no_convs_fcomb
-        self.initializers = {'w':'he_normal', 'b':'normal'}
+        self.initializers = {'w': 'he_normal', 'b': 'normal'}
         self.beta = beta
         self.z_prior_sample = 0
         self.consensus_masking = consensus_masking
         self.rl_swap = rl_swap
 
-        self.unet = Unet(self.input_channels, self.num_classes, self.num_filters, self.initializers, apply_last_layer=False, padding=True).to(device)
-        self.prior = AxisAlignedConvGaussian(self.input_channels, self.num_filters, self.no_convs_per_block, self.latent_dim,  self.initializers,).to(device)
-        self.posterior = AxisAlignedConvGaussian(self.input_channels, self.num_filters, self.no_convs_per_block, self.latent_dim, self.initializers, posterior=True, num_classes=num_classes).to(device)
-        self.fcomb = Fcomb(self.num_filters, self.latent_dim, self.input_channels, self.num_classes, self.no_convs_fcomb, {'w':'orthogonal', 'b':'normal'}, use_tile=True).to(device)
+        self.unet = Unet(
+            self.input_channels,
+            self.num_classes,
+            self.num_filters,
+            self.initializers,
+            apply_last_layer=False,
+            padding=True
+        ).to(device)
+        self.prior = AxisAlignedConvGaussian(
+            self.input_channels,
+            self.num_filters,
+            self.no_convs_per_block,
+            self.latent_dim,
+            self.initializers
+        ).to(device)
+        self.posterior = AxisAlignedConvGaussian(
+            self.input_channels,
+            self.num_filters,
+            self.no_convs_per_block,
+            self.latent_dim,
+            self.initializers,
+            posterior=True,
+            num_classes=num_classes
+        ).to(device)
+        self.fcomb = Fcomb(
+            self.num_filters,
+            self.latent_dim,
+            self.input_channels,
+            self.num_classes,
+            self.no_convs_fcomb,
+            {'w': 'orthogonal', 'b': 'normal'},
+            use_tile=True
+        ).to(device)
 
     def forward(self, patch, segm, training=True):
-    # def forward(self, patch, segm=None)
         """
         Construct prior latent space for patch and run patch through UNet,
         in case training is True also construct posterior latent space
         """
         if training:
-        # if segm is not None:
             self.posterior_latent_space = self.posterior.forward(patch, segm)
         self.prior_latent_space = self.prior.forward(patch)
-        self.unet_features = self.unet.forward(patch,False)
+        self.unet_features = self.unet.forward(patch, False)
 
     def sample(self, testing=False):
         """
         Sample a segmentation by reconstructing from a prior sample
         and combining this with UNet features
         """
-        if testing == False:
+        if testing is False:
             # prior distribution ? (posterior in this case!)
             z_prior = self.prior_latent_space.rsample()
             self.z_prior_sample = z_prior
         else:
-            #You can choose whether you mean a sample or the mean here. For the GED it is important to take a sample.
-            #z_prior = self.prior_latent_space.base_dist.loc
+            # You can choose whether you mean a sample or the mean here. For the GED it is important to take a sample.
+            # z_prior = self.prior_latent_space.base_dist.loc
             z_prior = self.prior_latent_space.sample()
             self.z_prior_sample = z_prior
-        return self.fcomb.forward(self.unet_features,z_prior)
-
+        return self.fcomb.forward(self.unet_features, z_prior)
 
     def reconstruct(self, use_posterior_mean=False, calculate_posterior=False, z_posterior=None):
         """
@@ -272,7 +328,7 @@ class ProbabilisticUnet(nn.Module):
         calculate_posterior: if we use samapling to approximate KL we can sample here or supply a sample
         """
         if analytic:
-            #Neeed to add this to torch source code, see: https://github.com/pytorch/pytorch/issues/13545
+            # Neeed to add this to torch source code, see: https://github.com/pytorch/pytorch/issues/13545
             kl_div = kl.kl_divergence(self.posterior_latent_space, self.prior_latent_space)
         else:
             if calculate_posterior:
@@ -288,13 +344,18 @@ class ProbabilisticUnet(nn.Module):
         Here : consm is the "consensus mask"
         """
 
-        criterion = DiceLossWithLogits() if self.rl_swap else nn.BCEWithLogitsLoss(size_average = False, reduce=False, reduction=None)
+        criterion = DiceLossWithLogits() if self.rl_swap \
+            else nn.BCEWithLogitsLoss(size_average=False, reduce=False, reduction=None)
         z_posterior = self.posterior_latent_space.rsample()
 
-        self.kl = torch.mean(self.kl_divergence(analytic=analytic_kl, calculate_posterior=False, z_posterior=z_posterior))
+        self.kl = torch.mean(
+            self.kl_divergence(analytic=analytic_kl, calculate_posterior=False, z_posterior=z_posterior)
+        )
 
-        #Here we use the posterior sample sampled above
-        self.reconstruction = self.reconstruct(use_posterior_mean=reconstruct_posterior_mean, calculate_posterior=False, z_posterior=z_posterior)
+        # Here we use the posterior sample sampled above
+        self.reconstruction = self.reconstruct(
+            use_posterior_mean=reconstruct_posterior_mean, calculate_posterior=False, z_posterior=z_posterior
+        )
 
         if view:
             print(self.reconstruction.shape, segm.shape)

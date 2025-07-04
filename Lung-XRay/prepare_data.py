@@ -3,10 +3,7 @@ import os
 from glob import glob
 from shutil import copytree
 
-try:
-    import imageio.v2 as imageio
-except ImportError:
-    import imageio
+import imageio.v3 as imageio
 
 import numpy as np
 from skimage.transform import resize
